@@ -1,1 +1,2231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>The Grand Prize Wheel</title>
 
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Alfa+Slab+One&family=Bungee+Shade&family=Bungee&family=Lora:wght@400;600;700&display=swap" rel="stylesheet">
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <style>
+    body { margin: 0; font-family: 'Lora', Georgia, serif; background: #4a0814; }
+    #root { min-height: 100vh; }
+    .startup-loader {
+      position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+      flex-direction: column; gap: 20px; z-index: 999;
+      background: radial-gradient(ellipse at top, #7a1226 0%, #4a0814 55%, #2d0510 100%);
+      color: #FFD23F; font-family: 'Bungee', system-ui, sans-serif;
+    }
+    @keyframes startup-spin { to { transform: rotate(360deg); } }
+    .startup-loader .ring {
+      width: 70px; height: 70px;
+      border: 6px solid rgba(255, 210, 63, 0.2);
+      border-top-color: #FFD23F;
+      border-radius: 50%;
+      animation: startup-spin 1s linear infinite;
+    }
+    .startup-loader .label {
+      font-size: 18px; letter-spacing: 0.12em;
+      text-shadow: 2px 2px 0 #5C0A1C, 4px 4px 0 rgba(0,0,0,0.4);
+    }
+    .startup-loader .sublabel {
+      font-size: 11px; opacity: 0.6; max-width: 320px; text-align: center;
+      font-family: 'Lora', Georgia, serif; letter-spacing: 0.02em; line-height: 1.5;
+      padding: 0 16px;
+    }
+  </style>
+</head>
+<body>
+  <div id="root">
+    <div class="startup-loader" id="loader">
+      <div class="ring"></div>
+      <div class="label">LOADING THE PRIZE WHEEL…</div>
+      <div class="sublabel">First load takes a few seconds while React, Tailwind and Babel set up. After that the page is fast.</div>
+    </div>
+  </div>
+
+  <script type="text/babel" data-presets="react">
+    const { useState, useEffect, useRef } = React;
+
+    // ========== Inline icon components (replacing lucide-react) ==========
+    const Icon = ({ size = 24, className = '', style, children }) => (
+      <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size}
+        viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+        strokeLinecap="round" strokeLinejoin="round"
+        className={className} style={style}>
+        {children}
+      </svg>
+    );
+    const Plus         = (p) => <Icon {...p}><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></Icon>;
+    const Minus        = (p) => <Icon {...p}><line x1="5" y1="12" x2="19" y2="12"/></Icon>;
+    const X            = (p) => <Icon {...p}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></Icon>;
+    const Volume2      = (p) => <Icon {...p}><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></Icon>;
+    const VolumeX      = (p) => <Icon {...p}><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="22" y1="9" x2="16" y2="15"/><line x1="16" y1="9" x2="22" y2="15"/></Icon>;
+    const RotateCcw    = (p) => <Icon {...p}><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></Icon>;
+    const Sparkles     = (p) => <Icon {...p}><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.582a.5.5 0 0 1 0 .962L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/><path d="M20 3v4"/><path d="M22 5h-4"/><path d="M4 17v2"/><path d="M5 18H3"/></Icon>;
+    const ChevronDown  = (p) => <Icon {...p}><path d="m6 9 6 6 6-6"/></Icon>;
+    const ChevronUp    = (p) => <Icon {...p}><path d="m18 15-6-6-6 6"/></Icon>;
+    const Upload       = (p) => <Icon {...p}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></Icon>;
+    const Trash2       = (p) => <Icon {...p}><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></Icon>;
+    const ImageIcon    = (p) => <Icon {...p}><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></Icon>;
+    const Loader       = (p) => <Icon {...p}><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/></Icon>;
+    const ArrowLeft    = (p) => <Icon {...p}><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></Icon>;
+    const Check        = (p) => <Icon {...p}><polyline points="20 6 9 17 4 12"/></Icon>;
+    const Send         = (p) => <Icon {...p}><path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"/><path d="m21.854 2.147-10.94 10.939"/></Icon>;
+    const Trophy       = (p) => <Icon {...p}><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></Icon>;
+    const Gift         = (p) => <Icon {...p}><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13"/><path d="M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7"/><path d="M7.5 8a2.5 2.5 0 0 1 0-5C11 3 12 5 12 8c0-3 1-5 4.5-5a2.5 2.5 0 0 1 0 5"/></Icon>;
+    const Brain        = (p) => <Icon {...p}><path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 1.98-3A2.5 2.5 0 0 1 9.5 2Z"/><path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-1.98-3A2.5 2.5 0 0 0 14.5 2Z"/></Icon>;
+    const FastForward  = (p) => <Icon {...p}><polygon points="13 19 22 12 13 5 13 19"/><polygon points="2 19 11 12 2 5 2 19"/></Icon>;
+    const Star         = (p) => <Icon {...p}><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></Icon>;
+    const Clock        = (p) => <Icon {...p}><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></Icon>;
+    const Flame        = (p) => <Icon {...p}><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></Icon>;
+    const AlertTriangle = (p) => <Icon {...p}><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></Icon>;
+
+
+// ---------- Carnival palette ----------
+const PALETTE = [
+  '#C8102E', '#FFD23F', '#1A2A6C', '#FDF6E3',
+  '#0F8B8D', '#E76F51', '#264653', '#F4A261',
+];
+const SECTOR_TEXT = ['#FDF6E3', '#1A2A6C', '#FDF6E3', '#1A2A6C', '#FDF6E3', '#1A2A6C', '#FDF6E3', '#1A2A6C'];
+const GOLD = '#D4A017';
+const GOLD_LIGHT = '#FFD23F';
+const DEEP_RED = '#5C0A1C';
+const CREAM = '#F5E6C8';
+
+// ---------- Inverse / midnight palette ----------
+const INVERSE_PALETTE = [
+  '#06B6D4', '#1E1B4B', '#A78BFA', '#F0F9FF',
+  '#10B981', '#7C3AED', '#0EA5E9', '#FBBF24',
+];
+const INVERSE_TEXT  = ['#0F172A', '#F0F9FF', '#0F172A', '#1E1B4B', '#0F172A', '#F0F9FF', '#0F172A', '#1E1B4B'];
+const SILVER = '#CBD5E1';
+const SILVER_LIGHT = '#F0F9FF';
+const NIGHT = '#0F172A';
+const NIGHT_DARK = '#020617';
+
+// ---------- Defaults ----------
+const DEFAULT_BOXES = [
+  'Extra Recess', 'Homework Pass', 'Lunch with Teacher',
+  'Pick Class Music', 'Front of Lunch Line', 'Sticker Pack',
+  'Surprise Snack', 'Choose a Game', 'Movie Friday',
+];
+const DEFAULT_NUMBERS = ['2', '4', '6', '3', '8', '5', '10', '1'];
+
+// ---------- Image background removal (canvas flood-fill) ----------
+function processImage(originalUrl, removeBg, tolerance) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      const maxSize = 600;
+      let w = img.naturalWidth, h = img.naturalHeight;
+      if (w > maxSize || h > maxSize) {
+        const scale = maxSize / Math.max(w, h);
+        w = Math.floor(w * scale); h = Math.floor(h * scale);
+      }
+      canvas.width = w; canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, w, h);
+      if (!removeBg) { resolve(canvas.toDataURL('image/png')); return; }
+
+      const imageData = ctx.getImageData(0, 0, w, h);
+      const data = imageData.data;
+      const sampleCoords = [
+        [0, 0], [w - 1, 0], [0, h - 1], [w - 1, h - 1],
+        [(w / 2) | 0, 0], [(w / 2) | 0, h - 1],
+        [0, (h / 2) | 0], [w - 1, (h / 2) | 0],
+      ];
+      let bgR = 0, bgG = 0, bgB = 0, count = 0;
+      sampleCoords.forEach(([x, y]) => {
+        const idx = (y * w + x) * 4;
+        if (data[idx + 3] > 200) { bgR += data[idx]; bgG += data[idx + 1]; bgB += data[idx + 2]; count++; }
+      });
+      if (count === 0) { resolve(canvas.toDataURL('image/png')); return; }
+      bgR /= count; bgG /= count; bgB /= count;
+
+      const visited = new Uint8Array(w * h);
+      const stack = [];
+      for (let x = 0; x < w; x++) { stack.push(x); stack.push((h - 1) * w + x); }
+      for (let y = 0; y < h; y++) { stack.push(y * w); stack.push(y * w + w - 1); }
+      const tolSq = tolerance * tolerance;
+
+      while (stack.length > 0) {
+        const i = stack.pop();
+        if (visited[i]) continue;
+        visited[i] = 1;
+        const idx = i * 4;
+        const a = data[idx + 3];
+        let isBg = false;
+        if (a === 0) isBg = true;
+        else {
+          const dr = data[idx] - bgR, dg = data[idx + 1] - bgG, db = data[idx + 2] - bgB;
+          if (dr * dr + dg * dg + db * db <= tolSq) { data[idx + 3] = 0; isBg = true; }
+        }
+        if (!isBg) continue;
+        const x = i % w, y = (i / w) | 0;
+        if (x > 0) stack.push(i - 1);
+        if (x < w - 1) stack.push(i + 1);
+        if (y > 0) stack.push(i - w);
+        if (y < h - 1) stack.push(i + w);
+      }
+
+      const alphaCopy = new Uint8ClampedArray(w * h);
+      for (let i = 0; i < w * h; i++) alphaCopy[i] = data[i * 4 + 3];
+      for (let y = 1; y < h - 1; y++) {
+        for (let x = 1; x < w - 1; x++) {
+          const i = y * w + x;
+          if (alphaCopy[i] === 0) continue;
+          const transparentNeighbors =
+            (alphaCopy[i - 1] === 0 ? 1 : 0) + (alphaCopy[i + 1] === 0 ? 1 : 0) +
+            (alphaCopy[i - w] === 0 ? 1 : 0) + (alphaCopy[i + w] === 0 ? 1 : 0);
+          if (transparentNeighbors > 0) data[i * 4 + 3] = Math.max(0, alphaCopy[i] - transparentNeighbors * 50);
+        }
+      }
+      ctx.putImageData(imageData, 0, 0);
+      resolve(canvas.toDataURL('image/png'));
+    };
+    img.onerror = () => resolve(null);
+    img.src = originalUrl;
+  });
+}
+
+function CarnivalSpinner() {
+  // ----- Title -----
+  const [titleLine1, setTitleLine1] = useState('THE GRAND');
+  const [titleLine2, setTitleLine2] = useState('PRIZE WHEEL');
+
+  // ----- Main wheel -----
+  const [sectors, setSectors] = useState(() =>
+    Array.from({ length: 6 }, (_, i) => ({
+      id: `s_${Date.now()}_${i}`, label: `Player ${i + 1}`, weight: 1,
+    }))
+  );
+  const [biased, setBiased] = useState(false);
+  const [removeWinner, setRemoveWinner] = useState(false);
+  const [spinDuration, setSpinDuration] = useState(7);
+  const [celebration, setCelebration] = useState('confetti');
+  const [soundOn, setSoundOn] = useState(true);
+
+  const [rotation, setRotation] = useState(0);
+  const [spinning, setSpinning] = useState(false);
+  const [winner, setWinner] = useState(null);
+  const [showWinner, setShowWinner] = useState(false);
+
+  const [marqueeStep, setMarqueeStep] = useState(0);
+
+  // ----- Center image -----
+  const [originalDataUrl, setOriginalDataUrl] = useState(null);
+  const [userImage, setUserImage] = useState(null);
+  const [removeBg, setRemoveBg] = useState(true);
+  const [bgTolerance, setBgTolerance] = useState(40);
+  const [processing, setProcessing] = useState(false);
+
+  // ----- Settings sections -----
+  const [openSection, setOpenSection] = useState({
+    title: false, players: true, image: false,
+    spin: false, boxes: false, question: false, numbers: false,
+  });
+  const toggleSection = (k) => setOpenSection((p) => ({ ...p, [k]: !p[k] }));
+
+  // ----- Prize boxes -----
+  const [boxes, setBoxes] = useState(DEFAULT_BOXES);
+
+  // ----- Bonus question (image-based) -----
+  const [questionImage, setQuestionImage] = useState(null);     // teacher's question photo
+  const [incorrectImage, setIncorrectImage] = useState(null);   // teacher's "wrong!" graphic (optional)
+  const [correctAnswer, setCorrectAnswer] = useState(1);        // 0..3 = A..D
+
+  // ----- Timer -----
+  const [timerEnabled, setTimerEnabled] = useState(true);
+  const [timerDuration, setTimerDuration] = useState(30);       // seconds
+  const [timeLeft, setTimeLeft] = useState(30);
+  const [timerExpired, setTimerExpired] = useState(false);
+  const [showBoom, setShowBoom] = useState(false);
+
+  // ----- Number spinner -----
+  const [numberSectors, setNumberSectors] = useState(() =>
+    DEFAULT_NUMBERS.map((n, i) => ({ id: `n_${i}`, label: n, weight: 1 }))
+  );
+  const [numberRotation, setNumberRotation] = useState(0);
+  const [numberSpinning, setNumberSpinning] = useState(false);
+  const [numberWinner, setNumberWinner] = useState(null);
+
+  // ----- Prize-round flow -----
+  // 'main' | 'choice' | 'question' | 'verdict' | 'wrongResult' | 'numberSpin' | 'boxes' | 'final'
+  const [view, setView] = useState('main');
+  const [studentAnswer, setStudentAnswer] = useState(null);
+  const [celebrationCount, setCelebrationCount] = useState(1);
+  const [selectedBox, setSelectedBox] = useState(null);
+  const [bonusOutcome, setBonusOutcome] = useState(null); // 'skipped' | 'correct' | 'incorrect' | 'timeout'
+
+  // ----- Refs -----
+  const audioCtxRef = useRef(null);
+  const lastSectorRef = useRef(-1);
+  const animFrameRef = useRef(null);
+  const numberAnimFrameRef = useRef(null);
+  const lastNumberSectorRef = useRef(-1);
+  const celebCanvasRef = useRef(null);
+  const fileInputRef = useRef(null);
+  const questionImageRef = useRef(null);
+  const incorrectImageRef = useRef(null);
+  const timerStartRef = useRef(null);
+  const timerRafRef = useRef(null);
+
+  // ----- Marquee chase -----
+  useEffect(() => {
+    const id = setInterval(() => setMarqueeStep((s) => s + 1), 180);
+    return () => clearInterval(id);
+  }, []);
+
+  // ----- Re-process center image -----
+  useEffect(() => {
+    if (!originalDataUrl) return;
+    let cancelled = false;
+    setProcessing(true);
+    const t = setTimeout(async () => {
+      const out = await processImage(originalDataUrl, removeBg, bgTolerance);
+      if (!cancelled) {
+        if (out) setUserImage(out);
+        setProcessing(false);
+      }
+    }, 220);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [originalDataUrl, removeBg, bgTolerance]);
+
+  // ----- Timer countdown (only while in 'question' view) -----
+  useEffect(() => {
+    if (view !== 'question' || !timerEnabled) {
+      setTimeLeft(timerDuration);
+      setTimerExpired(false);
+      if (timerRafRef.current) cancelAnimationFrame(timerRafRef.current);
+      return;
+    }
+
+    setTimeLeft(timerDuration);
+    setTimerExpired(false);
+    timerStartRef.current = performance.now();
+
+    const tick = () => {
+      const elapsed = (performance.now() - timerStartRef.current) / 1000;
+      const remaining = Math.max(0, timerDuration - elapsed);
+      setTimeLeft(remaining);
+      if (remaining <= 0) {
+        handleTimerExpire();
+        return;
+      }
+      timerRafRef.current = requestAnimationFrame(tick);
+    };
+    timerRafRef.current = requestAnimationFrame(tick);
+
+    return () => {
+      if (timerRafRef.current) cancelAnimationFrame(timerRafRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view, timerEnabled, timerDuration]);
+
+  // ----- Audio -----
+  const getCtx = () => {
+    if (!audioCtxRef.current && typeof window !== 'undefined') {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (Ctx) audioCtxRef.current = new Ctx();
+    }
+    return audioCtxRef.current;
+  };
+  const tone = (freq, dur, type = 'square', gain = 0.08, when = 0, slideTo = null) => {
+    if (!soundOn) return;
+    const ctx = getCtx(); if (!ctx) return;
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.type = type;
+    const t0 = ctx.currentTime + when;
+    o.frequency.setValueAtTime(freq, t0);
+    if (slideTo !== null) o.frequency.exponentialRampToValueAtTime(slideTo, t0 + dur);
+    g.gain.setValueAtTime(0, t0);
+    g.gain.linearRampToValueAtTime(gain, t0 + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+    o.connect(g); g.connect(ctx.destination);
+    o.start(t0); o.stop(t0 + dur + 0.05);
+  };
+  const playTick = () => tone(1500, 0.05, 'square', 0.05, 0, 280);
+  const playFanfare = () => {
+    if (!soundOn) return;
+    const ctx = getCtx(); if (!ctx) return;
+    const seq = [
+      { f: 523.25, t: 0.00, d: 0.13 },
+      { f: 659.25, t: 0.13, d: 0.13 },
+      { f: 783.99, t: 0.26, d: 0.13 },
+      { f: 1046.5, t: 0.39, d: 0.7  },
+    ];
+    seq.forEach((n) => {
+      [
+        { type: 'square',   gain: 0.09, mul: 1 },
+        { type: 'triangle', gain: 0.05, mul: 0.5 },
+        { type: 'sawtooth', gain: 0.025, mul: 2 },
+      ].forEach((layer) => {
+        const o = ctx.createOscillator();
+        const g = ctx.createGain();
+        o.type = layer.type;
+        o.frequency.value = n.f * layer.mul;
+        const t = ctx.currentTime + n.t;
+        g.gain.setValueAtTime(0, t);
+        g.gain.linearRampToValueAtTime(layer.gain, t + 0.01);
+        g.gain.exponentialRampToValueAtTime(0.001, t + n.d);
+        o.connect(g); g.connect(ctx.destination);
+        o.start(t); o.stop(t + n.d + 0.05);
+      });
+    });
+  };
+  const playWhoosh = () => {
+    if (!soundOn) return;
+    const ctx = getCtx(); if (!ctx) return;
+    const noise = ctx.createBufferSource();
+    const buf = ctx.createBuffer(1, ctx.sampleRate * 0.4, ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / data.length);
+    noise.buffer = buf;
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.frequency.setValueAtTime(800, ctx.currentTime);
+    filter.frequency.exponentialRampToValueAtTime(200, ctx.currentTime + 0.4);
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.15, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+    noise.connect(filter); filter.connect(gain); gain.connect(ctx.destination);
+    noise.start(); noise.stop(ctx.currentTime + 0.4);
+  };
+  const playDing = () => {
+    if (!soundOn) return;
+    const ctx = getCtx(); if (!ctx) return;
+    [1318.51, 1975.53].forEach((f, i) => {
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = 'sine'; o.frequency.value = f;
+      const t = ctx.currentTime + i * 0.05;
+      g.gain.setValueAtTime(0.18, t);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 1.0);
+      o.connect(g); g.connect(ctx.destination);
+      o.start(t); o.stop(t + 1.0);
+    });
+  };
+  const playBuzz = () => {
+    if (!soundOn) return;
+    const ctx = getCtx(); if (!ctx) return;
+    [196.00, 174.61, 146.83].forEach((f, i) => {
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = 'sawtooth'; o.frequency.value = f;
+      const t = ctx.currentTime + i * 0.18;
+      g.gain.setValueAtTime(0, t);
+      g.gain.linearRampToValueAtTime(0.12, t + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
+      o.connect(g); g.connect(ctx.destination);
+      o.start(t); o.stop(t + 0.35);
+    });
+  };
+  const playSparkle = () => {
+    if (!soundOn) return;
+    [1500, 2000, 2500, 3000].forEach((f, i) => tone(f, 0.2, 'sine', 0.05, i * 0.04));
+  };
+  const playBoom = () => {
+    if (!soundOn) return;
+    const ctx = getCtx(); if (!ctx) return;
+    // Low rumble
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(120, ctx.currentTime);
+    o.frequency.exponentialRampToValueAtTime(35, ctx.currentTime + 0.55);
+    g.gain.setValueAtTime(0.45, ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.6);
+    o.connect(g); g.connect(ctx.destination);
+    o.start(); o.stop(ctx.currentTime + 0.6);
+    // Noise burst
+    const noise = ctx.createBufferSource();
+    const buf = ctx.createBuffer(1, ctx.sampleRate * 0.8, ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / data.length);
+    noise.buffer = buf;
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass'; filter.frequency.value = 400;
+    const ng = ctx.createGain();
+    ng.gain.setValueAtTime(0.35, ctx.currentTime);
+    ng.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.7);
+    noise.connect(filter); filter.connect(ng); ng.connect(ctx.destination);
+    noise.start(); noise.stop(ctx.currentTime + 0.8);
+  };
+  const playFuse = () => {
+    // Subtle sizzle every few seconds while fuse burns - low priority, skip for now
+  };
+
+  // ----- Sector helpers -----
+  const addSector = () => {
+    if (sectors.length >= 24) return;
+    setSectors((p) => [...p, { id: `s_${Date.now()}_${Math.random()}`, label: `Player ${p.length + 1}`, weight: 1 }]);
+  };
+  const removeSectorById = (id) => {
+    if (sectors.length <= 2) return;
+    setSectors((p) => p.filter((s) => s.id !== id));
+  };
+  const updateSector = (id, field, value) => {
+    setSectors((p) => p.map((s) => (s.id === id ? { ...s, [field]: value } : s)));
+  };
+  const resetMainWheel = () => {
+    if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+    setSectors(Array.from({ length: 6 }, (_, i) => ({
+      id: `s_${Date.now()}_${i}`, label: `Player ${i + 1}`, weight: 1,
+    })));
+    setRotation(0); setWinner(null); setShowWinner(false); setSpinning(false);
+  };
+
+  const addNumberSector = () => {
+    if (numberSectors.length >= 16) return;
+    setNumberSectors((p) => [...p, { id: `n_${Date.now()}_${Math.random()}`, label: '1', weight: 1 }]);
+  };
+  const removeNumberSector = (id) => {
+    if (numberSectors.length <= 2) return;
+    setNumberSectors((p) => p.filter((s) => s.id !== id));
+  };
+  const updateNumberSector = (id, value) => {
+    setNumberSectors((p) => p.map((s) => (s.id === id ? { ...s, label: value } : s)));
+  };
+
+  const updateBox = (i, value) => setBoxes((p) => p.map((b, idx) => (idx === i ? value : b)));
+
+  // ----- Image handlers -----
+  const handleFileUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (!file || !file.type.startsWith('image/')) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => setOriginalDataUrl(ev.target.result);
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+  const clearImage = () => { setOriginalDataUrl(null); setUserImage(null); setProcessing(false); };
+
+  const handleQuestionImageUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (!file || !file.type.startsWith('image/')) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => setQuestionImage(ev.target.result);
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+  const handleIncorrectImageUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (!file || !file.type.startsWith('image/')) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => setIncorrectImage(ev.target.result);
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  // ----- Spin (main) -----
+  const spin = () => {
+    if (spinning || sectors.length < 2) return;
+    const ctx = getCtx();
+    if (ctx && ctx.state === 'suspended') ctx.resume();
+    setSpinning(true); setShowWinner(false); setWinner(null); playWhoosh();
+
+    const sectorAngle = 360 / sectors.length;
+    let targetIdx = 0;
+    if (biased) {
+      const total = sectors.reduce((a, s) => a + Math.max(s.weight, 0), 0);
+      if (total <= 0) targetIdx = Math.floor(Math.random() * sectors.length);
+      else {
+        let r = Math.random() * total;
+        for (let i = 0; i < sectors.length; i++) {
+          r -= Math.max(sectors[i].weight, 0);
+          if (r <= 0) { targetIdx = i; break; }
+        }
+      }
+    } else targetIdx = Math.floor(Math.random() * sectors.length);
+
+    const centerAngle = targetIdx * sectorAngle + sectorAngle / 2;
+    const baseTargetMod = ((-centerAngle) % 360 + 360) % 360;
+    const currentMod = ((rotation % 360) + 360) % 360;
+    let delta = baseTargetMod - currentMod;
+    if (delta < 0) delta += 360;
+    const offset = (Math.random() - 0.5) * sectorAngle * 0.7;
+    const fullSpins = 5 + Math.floor(Math.random() * 3);
+    const target = rotation + delta + fullSpins * 360 + offset;
+    const startRotation = rotation;
+    const startTime = performance.now();
+    const duration = spinDuration * 1000;
+    lastSectorRef.current = -1;
+
+    const tick = (now) => {
+      const elapsed = now - startTime;
+      const t = Math.min(elapsed / duration, 1);
+      const eased = 1 - Math.pow(1 - t, 4);
+      const rot = startRotation + (target - startRotation) * eased;
+      setRotation(rot);
+      const norm = ((-rot % 360) + 360) % 360;
+      const idx = Math.floor(norm / sectorAngle);
+      if (idx !== lastSectorRef.current) { playTick(); lastSectorRef.current = idx; }
+      if (t < 1) animFrameRef.current = requestAnimationFrame(tick);
+      else {
+        const win = sectors[targetIdx];
+        setSpinning(false); setWinner(win); setShowWinner(true);
+        playFanfare(); launchCelebration('confetti');
+      }
+    };
+    animFrameRef.current = requestAnimationFrame(tick);
+  };
+
+  // ----- Spin (number wheel) -----
+  const spinNumberWheel = () => {
+    if (numberSpinning || numberSectors.length < 2) return;
+    const ctx = getCtx();
+    if (ctx && ctx.state === 'suspended') ctx.resume();
+    setNumberSpinning(true); setNumberWinner(null); playWhoosh();
+
+    const sectorAngle = 360 / numberSectors.length;
+    const targetIdx = Math.floor(Math.random() * numberSectors.length);
+    const centerAngle = targetIdx * sectorAngle + sectorAngle / 2;
+    const baseTargetMod = ((-centerAngle) % 360 + 360) % 360;
+    const currentMod = ((numberRotation % 360) + 360) % 360;
+    let delta = baseTargetMod - currentMod;
+    if (delta < 0) delta += 360;
+    const offset = (Math.random() - 0.5) * sectorAngle * 0.6;
+    const fullSpins = 5 + Math.floor(Math.random() * 2);
+    const target = numberRotation + delta + fullSpins * 360 + offset;
+    const startRotation = numberRotation;
+    const startTime = performance.now();
+    const duration = 6000;
+    lastNumberSectorRef.current = -1;
+
+    const tick = (now) => {
+      const elapsed = now - startTime;
+      const t = Math.min(elapsed / duration, 1);
+      const eased = 1 - Math.pow(1 - t, 4);
+      const rot = startRotation + (target - startRotation) * eased;
+      setNumberRotation(rot);
+      const norm = ((-rot % 360) + 360) % 360;
+      const idx = Math.floor(norm / sectorAngle);
+      if (idx !== lastNumberSectorRef.current) { playTick(); lastNumberSectorRef.current = idx; }
+      if (t < 1) numberAnimFrameRef.current = requestAnimationFrame(tick);
+      else {
+        const win = numberSectors[targetIdx];
+        const num = parseInt(win.label) || 1;
+        setNumberSpinning(false); setNumberWinner(win); setCelebrationCount(num);
+        playFanfare(); launchCelebration('stars');
+      }
+    };
+    numberAnimFrameRef.current = requestAnimationFrame(tick);
+  };
+
+  // ----- Prize-round transitions -----
+  const goToPrizeRound = () => {
+    setShowWinner(false);
+    setStudentAnswer(null);
+    setSelectedBox(null);
+    setNumberWinner(null);
+    setCelebrationCount(1);
+    setBonusOutcome(null);
+    setView('choice');
+  };
+  const skipPrizeRound = () => {
+    setShowWinner(false);
+    if (removeWinner && winner) {
+      setTimeout(() => setSectors((p) => (p.length > 2 ? p.filter((s) => s.id !== winner.id) : p)), 100);
+    }
+  };
+  const takeBonus = () => { setStudentAnswer(null); setView('question'); };
+  const skipBonus = () => { setBonusOutcome('skipped'); setCelebrationCount(1); setView('boxes'); };
+  const submitAnswer = () => {
+    if (studentAnswer === null) return;
+    if (timerRafRef.current) cancelAnimationFrame(timerRafRef.current);
+    setView('verdict');
+  };
+  const markCorrect = () => {
+    setBonusOutcome('correct'); playDing();
+    launchCelebration('confetti');
+    setNumberRotation(0); setNumberWinner(null);
+    setView('numberSpin');
+  };
+  const markIncorrect = () => {
+    setBonusOutcome('incorrect'); playBuzz();
+    setCelebrationCount(1);
+    setView('wrongResult');
+  };
+  const handleTimerExpire = () => {
+    if (view !== 'question') return;
+    setTimerExpired(true);
+    setBonusOutcome('timeout');
+    setCelebrationCount(1);
+    setShowBoom(true);
+    playBoom();
+    launchExplosion();
+    setTimeout(() => { setShowBoom(false); setView('wrongResult'); }, 1700);
+  };
+  const continueFromWrong = () => { setView('boxes'); };
+  const continueFromNumberSpin = () => { setView('boxes'); };
+  const selectBox = (i) => {
+    if (selectedBox !== null) return;
+    setSelectedBox(i); playSparkle();
+    setTimeout(() => { setView('final'); playFanfare(); launchCelebration(celebration); }, 1400);
+  };
+  const finishPrizeRound = () => {
+    setView('main');
+    if (winner && removeWinner) {
+      setSectors((p) => (p.length > 2 ? p.filter((s) => s.id !== winner.id) : p));
+    }
+    setSelectedBox(null); setStudentAnswer(null); setNumberWinner(null);
+    setCelebrationCount(1); setBonusOutcome(null);
+  };
+  const exitToMain = () => {
+    if (timerRafRef.current) cancelAnimationFrame(timerRafRef.current);
+    setView('main');
+    setSelectedBox(null); setStudentAnswer(null); setNumberWinner(null);
+    setCelebrationCount(1); setBonusOutcome(null); setTimerExpired(false);
+  };
+
+  // ----- Celebration & explosion canvas -----
+  const launchCelebration = (kind = celebration) => {
+    if (kind === 'none') return;
+    const canvas = celebCanvasRef.current; if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const W = (canvas.width = window.innerWidth);
+    const H = (canvas.height = window.innerHeight);
+    let particles = [];
+    const drawStar = (c, size) => {
+      c.beginPath();
+      const points = 5, outer = size / 2, inner = size / 4.5;
+      for (let i = 0; i < points * 2; i++) {
+        const r = i % 2 === 0 ? outer : inner;
+        const a = (i * Math.PI) / points - Math.PI / 2;
+        const x = Math.cos(a) * r, y = Math.sin(a) * r;
+        if (i === 0) c.moveTo(x, y); else c.lineTo(x, y);
+      }
+      c.closePath(); c.fill();
+    };
+    const colors = view === 'numberSpin' ? INVERSE_PALETTE : PALETTE;
+
+    if (kind === 'confetti') {
+      for (let i = 0; i < 280; i++) {
+        particles.push({
+          x: W / 2 + (Math.random() - 0.5) * 220, y: H / 2,
+          vx: (Math.random() - 0.5) * 18, vy: -Math.random() * 20 - 8,
+          w: Math.random() * 10 + 5, h: Math.random() * 6 + 3,
+          color: colors[Math.floor(Math.random() * colors.length)],
+          rot: Math.random() * Math.PI * 2, vr: (Math.random() - 0.5) * 0.45,
+          shape: Math.random() < 0.55 ? 'rect' : 'circle', life: 1, mode: 'gravity',
+        });
+      }
+    } else if (kind === 'fireworks') {
+      const bursts = [
+        { x: W * 0.3, y: H * 0.4, delay: 0 },
+        { x: W * 0.7, y: H * 0.35, delay: 220 },
+        { x: W * 0.5, y: H * 0.5, delay: 440 },
+        { x: W * 0.2, y: H * 0.55, delay: 660 },
+        { x: W * 0.85, y: H * 0.5, delay: 880 },
+      ];
+      bursts.forEach((b) => {
+        setTimeout(() => {
+          const c = colors[Math.floor(Math.random() * colors.length)];
+          for (let i = 0; i < 70; i++) {
+            const ang = Math.random() * Math.PI * 2;
+            const sp = Math.random() * 9 + 3;
+            particles.push({
+              x: b.x, y: b.y, vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp,
+              w: 4, h: 4, color: c, rot: 0, vr: 0,
+              shape: 'circle', life: 1,
+              fade: 0.013 + Math.random() * 0.012, mode: 'firework',
+            });
+          }
+        }, b.delay);
+      });
+    } else if (kind === 'stars') {
+      for (let i = 0; i < 90; i++) {
+        particles.push({
+          x: W / 2, y: H / 2,
+          vx: (Math.random() - 0.5) * 16, vy: (Math.random() - 0.5) * 16,
+          w: Math.random() * 18 + 10, h: Math.random() * 18 + 10,
+          color: colors[Math.floor(Math.random() * colors.length)],
+          rot: Math.random() * Math.PI * 2, vr: (Math.random() - 0.5) * 0.25,
+          shape: 'star', life: 1, fade: 0.008, mode: 'star',
+        });
+      }
+    }
+
+    let frame = 0;
+    const animate = () => {
+      ctx.clearRect(0, 0, W, H);
+      particles = particles.filter((p) => p.life > 0 && p.y < H + 80);
+      particles.forEach((p) => {
+        p.x += p.vx; p.y += p.vy;
+        if (p.mode === 'gravity') { p.vy += 0.4; p.vx *= 0.99; }
+        else if (p.mode === 'firework') { p.vy += 0.12; p.vx *= 0.97; p.vy *= 0.97; p.life -= p.fade; }
+        else if (p.mode === 'star') { p.vx *= 0.96; p.vy *= 0.96; p.life -= p.fade; }
+        p.rot += p.vr;
+        ctx.save();
+        ctx.globalAlpha = Math.max(p.life, 0);
+        ctx.translate(p.x, p.y); ctx.rotate(p.rot);
+        ctx.fillStyle = p.color;
+        if (p.shape === 'rect') ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+        else if (p.shape === 'circle') { ctx.beginPath(); ctx.arc(0, 0, p.w / 2, 0, Math.PI * 2); ctx.fill(); }
+        else if (p.shape === 'star') drawStar(ctx, p.w);
+        ctx.restore();
+      });
+      frame++;
+      if (frame < 420 && (particles.length > 0 || frame < 60)) requestAnimationFrame(animate);
+      else ctx.clearRect(0, 0, W, H);
+    };
+    animate();
+  };
+
+  const launchExplosion = () => {
+    const canvas = celebCanvasRef.current; if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const W = (canvas.width = window.innerWidth);
+    const H = (canvas.height = window.innerHeight);
+    let particles = [];
+    const explosionColors = ['#FF6B35', '#F7931E', '#FFD23F', '#C8102E', '#FFFFFF', '#FFA500'];
+
+    // Massive radial burst from center
+    for (let i = 0; i < 500; i++) {
+      const ang = Math.random() * Math.PI * 2;
+      const sp = Math.random() * 35 + 4;
+      particles.push({
+        x: W / 2, y: H / 2,
+        vx: Math.cos(ang) * sp,
+        vy: Math.sin(ang) * sp,
+        w: Math.random() * 14 + 4,
+        color: explosionColors[Math.floor(Math.random() * explosionColors.length)],
+        life: 1, fade: 0.012 + Math.random() * 0.012,
+      });
+    }
+    // Smoke ring
+    for (let i = 0; i < 80; i++) {
+      const ang = Math.random() * Math.PI * 2;
+      const sp = Math.random() * 8 + 4;
+      particles.push({
+        x: W / 2, y: H / 2,
+        vx: Math.cos(ang) * sp,
+        vy: Math.sin(ang) * sp - 1,
+        w: Math.random() * 30 + 20,
+        color: '#444444',
+        life: 0.6, fade: 0.005,
+        smoke: true,
+      });
+    }
+
+    let frame = 0;
+    const animate = () => {
+      ctx.clearRect(0, 0, W, H);
+      particles = particles.filter((p) => p.life > 0);
+      particles.forEach((p) => {
+        p.x += p.vx; p.y += p.vy;
+        p.vy += p.smoke ? 0.05 : 0.35;
+        p.vx *= 0.97; p.vy *= 0.97;
+        p.life -= p.fade;
+        ctx.save();
+        ctx.globalAlpha = Math.max(p.life, 0) * (p.smoke ? 0.5 : 1);
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.w / 2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      });
+      frame++;
+      if (frame < 200 && particles.length > 0) requestAnimationFrame(animate);
+      else ctx.clearRect(0, 0, W, H);
+    };
+    animate();
+  };
+
+  // ----- Wheel renderer (used by both wheels) -----
+  const SVG_SIZE = 640;
+  const C = SVG_SIZE / 2;
+  const R = 280;
+  const polar = (angDeg, rad) => {
+    const a = ((angDeg - 90) * Math.PI) / 180;
+    return { x: C + rad * Math.cos(a), y: C + rad * Math.sin(a) };
+  };
+  const buildSectorPath = (i, angle) => {
+    const a0 = i * angle, a1 = (i + 1) * angle;
+    const p0 = polar(a0, R), p1 = polar(a1, R);
+    const large = angle > 180 ? 1 : 0;
+    return `M ${C} ${C} L ${p0.x} ${p0.y} A ${R} ${R} 0 ${large} 1 ${p1.x} ${p1.y} Z`;
+  };
+
+  const renderWheelSVG = ({
+    sectorList, rotationVal, palette, textColors, accent, accentLight, border,
+    centerImg = null, marqueeOnFill, marqueeOffFill, lightGlow,
+  }) => {
+    const sa = 360 / Math.max(sectorList.length, 1);
+    const labelFontSize = Math.max(11, Math.min(26, 170 / sectorList.length + 6));
+    const NUM_LIGHTS = 32;
+    const lightArr = Array.from({ length: NUM_LIGHTS }, (_, i) => {
+      const ang = (i / NUM_LIGHTS) * 360;
+      const pos = polar(ang, R + 24);
+      const on = (i + marqueeStep) % 2 === 0;
+      return { ...pos, on };
+    });
+    const CENTER_R = R * 0.30;
+    const clipId = `clip_${centerImg ? 'img' : 'plain'}_${Math.random().toString(36).slice(2, 7)}`;
+
+    return (
+      <svg viewBox={`0 0 ${SVG_SIZE} ${SVG_SIZE}`} className="absolute inset-0 w-full h-full" style={{ overflow: 'visible' }}>
+        <defs>
+          <clipPath id={clipId}><circle cx={C} cy={C} r={CENTER_R} /></clipPath>
+        </defs>
+        {lightArr.map((l, i) => (
+          <circle
+            key={i} cx={l.x} cy={l.y} r={7}
+            fill={l.on ? marqueeOnFill : marqueeOffFill}
+            style={l.on ? { filter: `drop-shadow(0 0 8px ${marqueeOnFill}) drop-shadow(0 0 16px ${lightGlow})` } : undefined}
+          />
+        ))}
+        <g style={{ transform: `rotate(${rotationVal}deg)`, transformOrigin: `${C}px ${C}px`, willChange: 'transform' }}>
+          {sectorList.map((s, i) => (
+            <path key={s.id} d={buildSectorPath(i, sa)}
+              fill={palette[i % palette.length]} stroke={border} strokeWidth={2} />
+          ))}
+          {sectorList.map((_, i) => {
+            const a = i * sa; const p = polar(a, R);
+            return <line key={`div-${i}`} x1={C} y1={C} x2={p.x} y2={p.y} stroke={accent} strokeWidth={1.5} opacity={0.5} />;
+          })}
+          {sectorList.map((s, i) => {
+            const center = i * sa + sa / 2;
+            const pos = polar(center, R * 0.66);
+            const txtColor = textColors[i % textColors.length];
+            return (
+              <g key={`lbl-${s.id}`} transform={`translate(${pos.x} ${pos.y}) rotate(${center})`}>
+                <text textAnchor="middle" dominantBaseline="middle" fill={txtColor}
+                  style={{
+                    fontFamily: "'Bungee', 'Alfa Slab One', sans-serif",
+                    fontSize: labelFontSize, letterSpacing: '0.02em',
+                    paintOrder: 'stroke fill', stroke: 'rgba(0,0,0,0.18)', strokeWidth: 0.6,
+                  }}>
+                  {s.label.length > 14 ? s.label.slice(0, 13) + '…' : s.label}
+                </text>
+              </g>
+            );
+          })}
+          {!centerImg && (
+            <>
+              <circle cx={C} cy={C} r={CENTER_R} fill={accent} stroke={border} strokeWidth={3} />
+              <circle cx={C} cy={C} r={CENTER_R - 8} fill={accentLight} />
+              <text x={C} y={C + 14} textAnchor="middle" dominantBaseline="middle"
+                fill={border} style={{ fontFamily: "'Alfa Slab One', serif", fontSize: 36 }}>★</text>
+            </>
+          )}
+        </g>
+        {centerImg && (
+          <g clipPath={`url(#${clipId})`}>
+            <circle cx={C} cy={C} r={CENTER_R} fill={border} />
+            <g style={{ transform: `rotate(${-rotationVal}deg)`, transformOrigin: `${C}px ${C}px`, willChange: 'transform' }}>
+              <image href={centerImg} x={C - CENTER_R} y={C - CENTER_R}
+                width={CENTER_R * 2} height={CENTER_R * 2} preserveAspectRatio="xMidYMid meet" />
+            </g>
+          </g>
+        )}
+        {centerImg && (
+          <>
+            <circle cx={C} cy={C} r={CENTER_R + 2} fill="none" stroke={border} strokeWidth={3} />
+            <circle cx={C} cy={C} r={CENTER_R + 6} fill="none" stroke={accentLight} strokeWidth={3} />
+            <circle cx={C} cy={C} r={CENTER_R + 10} fill="none" stroke={border} strokeWidth={2} />
+          </>
+        )}
+        <circle cx={C} cy={C} r={centerImg ? 9 : 14} fill={border} stroke={accentLight} strokeWidth={2.5} />
+        <circle cx={C} cy={C} r={centerImg ? 3 : 5} fill={accentLight} />
+      </svg>
+    );
+  };
+
+  // ----- Render helpers -----
+  const totalWeight = sectors.reduce((a, s) => a + Math.max(s.weight, 0), 0);
+  const timerProgress = timerEnabled ? Math.max(0, Math.min(1, timeLeft / timerDuration)) : 1;
+  const timerUrgent = timerEnabled && timerProgress < 0.25 && !timerExpired;
+
+  const renderTitle = () => (
+    <header className="relative z-10 pt-8 pb-4 px-4 text-center">
+      <div className="inline-block ribbon-wave">
+        <p className="font-bungee text-xs sm:text-sm tracking-widest" style={{ color: GOLD_LIGHT }}>
+          ✦  STEP RIGHT UP  ✦  TRY YOUR LUCK  ✦
+        </p>
+      </div>
+      <h1 className="font-display title-shimmer text-5xl sm:text-7xl md:text-8xl mt-2"
+        style={{ color: GOLD_LIGHT, lineHeight: 1 }}>
+        {titleLine1 || 'THE GRAND'}
+        {titleLine2 ? <><br /><span style={{ color: '#FDF6E3' }}>{titleLine2}</span></> : null}
+      </h1>
+      <div className="flex items-center justify-center gap-3 mt-3">
+        <div className="h-px w-16 sm:w-24" style={{ background: GOLD }} />
+        <Sparkles size={20} style={{ color: GOLD_LIGHT }} />
+        <div className="h-px w-16 sm:w-24" style={{ background: GOLD }} />
+      </div>
+    </header>
+  );
+
+  const PrizeRoundHeader = ({ palette = 'carnival' }) => {
+    const isInverse = palette === 'inverse';
+    return (
+      <div className="absolute top-0 left-0 right-0 z-20 px-4 py-3 flex items-center justify-between">
+        <button
+          onClick={exitToMain}
+          className="font-bungee text-xs px-3 py-2 rounded-full flex items-center gap-1 transition-transform hover:scale-105"
+          style={{
+            background: isInverse ? 'rgba(255,255,255,0.08)' : 'rgba(245,230,200,0.12)',
+            color: isInverse ? SILVER_LIGHT : CREAM,
+            border: `2px solid ${isInverse ? SILVER : GOLD}`,
+          }}
+        >
+          <ArrowLeft size={14} /> EXIT
+        </button>
+        {winner && (
+          <div className="text-center px-3 py-2 rounded-full"
+            style={{
+              background: isInverse ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.25)',
+              border: `2px solid ${isInverse ? SILVER : GOLD}`,
+            }}>
+            <span className="font-bungee text-xs" style={{ color: isInverse ? SILVER : GOLD_LIGHT, opacity: 0.8 }}>
+              WINNER:
+            </span>{' '}
+            <span className="font-display text-sm sm:text-base" style={{ color: isInverse ? SILVER_LIGHT : '#FDF6E3' }}>
+              {winner.label}
+            </span>
+          </div>
+        )}
+        <div style={{ width: 60 }} />
+      </div>
+    );
+  };
+
+  return (
+    <div
+      className={`min-h-screen w-full relative overflow-x-hidden ${showBoom ? 'screen-shake' : ''}`}
+      style={{
+        background: view === 'numberSpin'
+          ? `radial-gradient(ellipse at top, #1e1b4b 0%, #0f172a 55%, #020617 100%)`
+          : `radial-gradient(ellipse at top, #7a1226 0%, #4a0814 55%, #2d0510 100%)`,
+        fontFamily: "'Lora', Georgia, serif",
+        transition: 'background 0.6s ease',
+      }}
+    >
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Alfa+Slab+One&family=Bungee+Shade&family=Bungee&family=Lora:ital,wght@0,400;0,600;0,700;1,400&display=swap');
+        .font-display { font-family: 'Alfa Slab One', 'Lora', serif; letter-spacing: 0.02em; }
+        .font-bungee  { font-family: 'Bungee', 'Alfa Slab One', sans-serif; letter-spacing: 0.05em; }
+        .font-shade   { font-family: 'Bungee Shade', 'Alfa Slab One', sans-serif; }
+
+        .stripes { background-image: repeating-linear-gradient(45deg, rgba(255,210,63,0.06) 0, rgba(255,210,63,0.06) 14px, transparent 14px, transparent 28px); }
+        .stripes-cool { background-image: repeating-linear-gradient(45deg, rgba(203,213,225,0.05) 0, rgba(203,213,225,0.05) 14px, transparent 14px, transparent 28px); }
+        .tent-stripes { background-image: repeating-linear-gradient(to right, #C8102E 0 28px, #FDF6E3 28px 56px); }
+        .tent-stripes-cool { background-image: repeating-linear-gradient(to right, #1E1B4B 0 28px, #CBD5E1 28px 56px); }
+
+        .ornate-border {
+          background: linear-gradient(135deg, #B8860B, #FFD23F 30%, #B8860B 60%, #FFD23F 80%, #8B6914);
+          box-shadow: inset 0 0 0 2px rgba(255,255,255,0.25), inset 0 0 12px rgba(0,0,0,0.25), 0 8px 24px rgba(0,0,0,0.45), 0 0 0 4px #5C0A1C;
+        }
+        .ornate-border-cool {
+          background: linear-gradient(135deg, #94A3B8, #F0F9FF 30%, #94A3B8 60%, #F0F9FF 80%, #475569);
+          box-shadow: inset 0 0 0 2px rgba(255,255,255,0.4), inset 0 0 12px rgba(15,23,42,0.4), 0 8px 24px rgba(0,0,0,0.5), 0 0 0 4px #0F172A;
+        }
+        .pointer-shadow { filter: drop-shadow(0 6px 6px rgba(0,0,0,0.5)); }
+
+        @keyframes spinPulse {
+          0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255,210,63,0.7), 0 12px 32px rgba(0,0,0,0.5); }
+          50% { transform: scale(1.04); box-shadow: 0 0 0 14px rgba(255,210,63,0), 0 12px 32px rgba(0,0,0,0.5); }
+        }
+        .spin-btn-pulse { animation: spinPulse 1.6s ease-in-out infinite; }
+        @keyframes spinPulseCool {
+          0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(240,249,255,0.6), 0 12px 32px rgba(0,0,0,0.5); }
+          50% { transform: scale(1.04); box-shadow: 0 0 0 14px rgba(240,249,255,0), 0 12px 32px rgba(0,0,0,0.5); }
+        }
+        .spin-btn-pulse-cool { animation: spinPulseCool 1.6s ease-in-out infinite; }
+
+        @keyframes textShimmer {
+          0%, 100% { text-shadow: 0 0 12px rgba(255,210,63,0.5), 4px 4px 0 #5C0A1C, 8px 8px 0 rgba(0,0,0,0.4); }
+          50% { text-shadow: 0 0 28px rgba(255,210,63,0.9), 4px 4px 0 #5C0A1C, 8px 8px 0 rgba(0,0,0,0.4); }
+        }
+        .title-shimmer { animation: textShimmer 2.4s ease-in-out infinite; }
+        @keyframes textShimmerCool {
+          0%, 100% { text-shadow: 0 0 12px rgba(167,139,250,0.5), 4px 4px 0 #0F172A, 8px 8px 0 rgba(0,0,0,0.4); }
+          50% { text-shadow: 0 0 28px rgba(167,139,250,0.9), 4px 4px 0 #0F172A, 8px 8px 0 rgba(0,0,0,0.4); }
+        }
+        .title-shimmer-cool { animation: textShimmerCool 2.4s ease-in-out infinite; }
+
+        @keyframes winnerPop {
+          0% { transform: scale(0.4) rotate(-12deg); opacity: 0; }
+          60% { transform: scale(1.1) rotate(2deg); opacity: 1; }
+          100% { transform: scale(1) rotate(0deg); opacity: 1; }
+        }
+        .winner-pop { animation: winnerPop 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
+
+        @keyframes ribbonWave { 0%, 100% { transform: rotate(-3deg); } 50% { transform: rotate(3deg); } }
+        .ribbon-wave { animation: ribbonWave 2.5s ease-in-out infinite; }
+
+        @keyframes spinSlow { to { transform: rotate(360deg); } }
+        .spin-slow { animation: spinSlow 1.5s linear infinite; }
+
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        .fade-in { animation: fadeIn 0.5s ease-out forwards; }
+
+        @keyframes boxOpen {
+          0% { transform: scale(1) rotateY(0deg); }
+          50% { transform: scale(1.15) rotateY(180deg); }
+          100% { transform: scale(1.08) rotateY(360deg); }
+        }
+        .box-open { animation: boxOpen 1.2s ease-in-out forwards; }
+
+        @keyframes pulseGlow {
+          0%, 100% { box-shadow: 0 0 20px rgba(255,210,63,0.4); }
+          50% { box-shadow: 0 0 40px rgba(255,210,63,0.9); }
+        }
+        .pulse-glow { animation: pulseGlow 2s ease-in-out infinite; }
+
+        /* Fuse styles */
+        @keyframes flameFlicker {
+          0%, 100% { transform: scale(1) translateY(0); }
+          25% { transform: scale(1.08, 0.92) translateY(-2px); }
+          50% { transform: scale(0.92, 1.1) translateY(0); }
+          75% { transform: scale(1.05, 0.95) translateY(-1px); }
+        }
+        .flame-flicker { animation: flameFlicker 0.18s infinite; filter: drop-shadow(0 0 12px #FF6B35); transform-origin: center bottom; }
+        .flame-urgent { animation-duration: 0.08s; filter: drop-shadow(0 0 18px #C8102E) drop-shadow(0 0 30px #FF6B35); }
+
+        @keyframes sparkRise {
+          0% { transform: translate(0, 0) scale(1); opacity: 1; }
+          100% { transform: translate(var(--dx, 0), -45px) scale(0); opacity: 0; }
+        }
+        .spark { position: absolute; width: 4px; height: 4px; border-radius: 50%; background: #FFD23F; animation: sparkRise 0.9s linear infinite; }
+
+        .fuse-rope-bg {
+          background:
+            repeating-linear-gradient(45deg, rgba(0,0,0,0.25) 0 3px, transparent 3px 7px),
+            repeating-linear-gradient(-45deg, rgba(0,0,0,0.25) 0 3px, transparent 3px 7px),
+            linear-gradient(to right, #5D2906 0%, #8B4513 25%, #A0522D 50%, #8B4513 75%, #5D2906 100%);
+          box-shadow:
+            inset 0 0 6px rgba(0,0,0,0.5),
+            0 0 10px rgba(139,69,19,0.4);
+          border-radius: 0 0 14px 14px;
+        }
+
+        /* Screen shake (timer expired) */
+        @keyframes screenShake {
+          0%, 100% { transform: translate(0, 0); }
+          10% { transform: translate(-10px, -6px); }
+          20% { transform: translate(10px, 6px); }
+          30% { transform: translate(-8px, 8px); }
+          40% { transform: translate(8px, -8px); }
+          50% { transform: translate(-6px, 4px); }
+          60% { transform: translate(6px, -4px); }
+          70% { transform: translate(-3px, 3px); }
+          80% { transform: translate(3px, -3px); }
+          90% { transform: translate(0, 0); }
+        }
+        .screen-shake { animation: screenShake 0.7s; }
+
+        @keyframes flashOverlay {
+          0% { opacity: 0; }
+          15% { opacity: 1; }
+          50% { opacity: 0.6; }
+          100% { opacity: 0; }
+        }
+        .flash-overlay { animation: flashOverlay 0.6s ease-out forwards; }
+
+        @keyframes boomTextPop {
+          0% { transform: scale(0.2) rotate(-15deg); opacity: 0; }
+          30% { transform: scale(1.4) rotate(5deg); opacity: 1; }
+          60% { transform: scale(1.1) rotate(-3deg); opacity: 1; }
+          100% { transform: scale(0.9) rotate(0deg); opacity: 0; }
+        }
+        .boom-text { animation: boomTextPop 1.5s ease-out forwards; }
+
+        @keyframes urgentPulse {
+          0%, 100% { background-color: rgba(200, 16, 46, 0); }
+          50% { background-color: rgba(200, 16, 46, 0.15); }
+        }
+        .urgent-tint { animation: urgentPulse 0.5s ease-in-out infinite; }
+
+        input[type="range"]::-webkit-slider-thumb {
+          appearance: none; width: 22px; height: 22px; border-radius: 50%;
+          background: ${GOLD_LIGHT}; border: 3px solid ${DEEP_RED}; cursor: pointer;
+          box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+        }
+        input[type="range"]::-moz-range-thumb {
+          width: 22px; height: 22px; border-radius: 50%;
+          background: ${GOLD_LIGHT}; border: 3px solid ${DEEP_RED}; cursor: pointer;
+        }
+        input[type="range"] {
+          -webkit-appearance: none; appearance: none; height: 8px; border-radius: 4px;
+          background: linear-gradient(to right, ${GOLD}, ${GOLD_LIGHT});
+          outline: none;
+        }
+        .toggle-track {
+          width: 52px; height: 28px; border-radius: 999px;
+          background: rgba(0,0,0,0.4); position: relative; cursor: pointer;
+          border: 2px solid ${GOLD}; transition: background 0.2s;
+        }
+        .toggle-track.on { background: ${DEEP_RED}; }
+        .toggle-thumb {
+          position: absolute; top: 1px; left: 1px;
+          width: 22px; height: 22px; border-radius: 50%;
+          background: ${GOLD_LIGHT}; transition: left 0.2s ease;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.4);
+        }
+        .toggle-track.on .toggle-thumb { left: 27px; }
+        .panel-card {
+          background: linear-gradient(135deg, #FDF6E3 0%, #F5E6C8 100%);
+          border: 4px solid ${GOLD};
+          box-shadow: 0 0 0 2px ${DEEP_RED}, 0 12px 32px rgba(0,0,0,0.4), inset 0 0 30px rgba(212,160,23,0.15);
+        }
+        .scroll-shadow::-webkit-scrollbar { width: 8px; }
+        .scroll-shadow::-webkit-scrollbar-track { background: rgba(92,10,28,0.1); border-radius: 4px; }
+        .scroll-shadow::-webkit-scrollbar-thumb { background: ${GOLD}; border-radius: 4px; }
+
+        .answer-btn {
+          background: linear-gradient(180deg, #FDF6E3, #F5E6C8);
+          border: 4px solid ${DEEP_RED};
+          color: ${DEEP_RED};
+          transition: transform 0.15s, box-shadow 0.15s, background 0.2s;
+        }
+        .answer-btn:hover:not(:disabled) { transform: translateY(-3px); box-shadow: 0 8px 0 ${DEEP_RED}; }
+        .answer-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .answer-btn.selected {
+          background: linear-gradient(180deg, ${GOLD_LIGHT}, ${GOLD});
+          transform: translateY(-3px);
+          box-shadow: 0 8px 0 ${DEEP_RED}, 0 0 30px rgba(255,210,63,0.6);
+        }
+      `}</style>
+
+      <div className={`absolute inset-0 pointer-events-none ${view === 'numberSpin' ? 'stripes-cool' : 'stripes'}`} />
+      <div className={`h-3 w-full relative z-10 ${view === 'numberSpin' ? 'tent-stripes-cool' : 'tent-stripes'}`} />
+
+      {/* ============== MAIN VIEW ============== */}
+      {view === 'main' && (
+        <>
+          {renderTitle()}
+          <div className="relative z-10 max-w-[1500px] mx-auto px-4 pb-12 flex flex-col lg:flex-row gap-6 lg:gap-10 items-start justify-center">
+            {/* Wheel */}
+            <div className="w-full lg:flex-1 flex flex-col items-center">
+              <div className="relative w-full max-w-[700px] aspect-square">
+                <div className="absolute inset-2 rounded-full ornate-border" style={{ padding: 14 }} />
+                <div className="absolute rounded-full"
+                  style={{ inset: 16, background: '#2d0510', boxShadow: 'inset 0 0 30px rgba(0,0,0,0.6)' }} />
+                {renderWheelSVG({
+                  sectorList: sectors, rotationVal: rotation,
+                  palette: PALETTE, textColors: SECTOR_TEXT,
+                  accent: GOLD, accentLight: GOLD_LIGHT, border: DEEP_RED,
+                  centerImg: userImage,
+                  marqueeOnFill: '#FFE066', marqueeOffFill: '#6B4F1A',
+                  lightGlow: 'rgba(255,210,63,0.7)',
+                })}
+                <div className="absolute left-1/2 -translate-x-1/2 pointer-shadow" style={{ top: -6, zIndex: 5 }}>
+                  <svg width="56" height="80" viewBox="0 0 56 80">
+                    <defs>
+                      <linearGradient id="pGold" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#FFE066" />
+                        <stop offset="50%" stopColor="#D4A017" />
+                        <stop offset="100%" stopColor="#8B6914" />
+                      </linearGradient>
+                    </defs>
+                    <path d="M 28 0 L 50 20 L 36 30 L 28 76 L 20 30 L 6 20 Z"
+                      fill="url(#pGold)" stroke={DEEP_RED} strokeWidth="3" strokeLinejoin="round" />
+                    <circle cx="28" cy="18" r="4" fill="#FFE066" />
+                  </svg>
+                </div>
+              </div>
+
+              <button onClick={spin} disabled={spinning || sectors.length < 2}
+                className={`mt-8 font-shade text-3xl sm:text-4xl px-12 sm:px-20 py-5 sm:py-6 rounded-full transition-transform ${
+                  spinning ? 'opacity-60 cursor-not-allowed' : 'spin-btn-pulse hover:scale-105 active:scale-95'
+                }`}
+                style={{
+                  background: `linear-gradient(180deg, ${GOLD_LIGHT}, ${GOLD} 45%, #8B6914)`,
+                  color: DEEP_RED, border: `4px solid ${DEEP_RED}`,
+                  textShadow: '0 2px 0 rgba(255,255,255,0.4)',
+                }}>
+                {spinning ? 'SPINNING…' : 'SPIN!'}
+              </button>
+
+              <div className="flex items-center gap-3 mt-4 flex-wrap justify-center">
+                <button onClick={resetMainWheel}
+                  className="font-bungee text-sm px-4 py-2 rounded-full flex items-center gap-2"
+                  style={{ background: 'rgba(245,230,200,0.1)', color: CREAM, border: `2px solid ${GOLD}` }}>
+                  <RotateCcw size={14} /> RESET
+                </button>
+                <button onClick={() => setSoundOn((v) => !v)}
+                  className="font-bungee text-sm px-4 py-2 rounded-full flex items-center gap-2"
+                  style={{ background: 'rgba(245,230,200,0.1)', color: CREAM, border: `2px solid ${GOLD}` }}>
+                  {soundOn ? <Volume2 size={14} /> : <VolumeX size={14} />}
+                  {soundOn ? 'SOUND ON' : 'SOUND OFF'}
+                </button>
+              </div>
+            </div>
+
+            {/* Settings */}
+            <div className="w-full lg:w-[440px] lg:flex-shrink-0">
+              <div className="panel-card rounded-2xl p-1">
+                <div className="rounded-xl px-5 py-4"
+                  style={{ background: `linear-gradient(90deg, ${DEEP_RED}, #8B0F2A)` }}>
+                  <h2 className="font-display text-2xl" style={{ color: GOLD_LIGHT }}>MIDWAY CONTROLS</h2>
+                </div>
+                <div className="p-3 space-y-2">
+                  {/* Title */}
+                  <Section title="WHEEL TITLE" icon={Star} isOpen={openSection.title} onToggle={() => toggleSection('title')}>
+                    <div className="space-y-2">
+                      <div>
+                        <label className="text-xs font-bungee block mb-1" style={{ color: DEEP_RED }}>LINE 1 (gold)</label>
+                        <input type="text" value={titleLine1} onChange={(e) => setTitleLine1(e.target.value)}
+                          placeholder="THE GRAND" maxLength={26}
+                          className="w-full px-3 py-2 rounded text-sm font-semibold outline-none"
+                          style={{ background: '#FFF8E7', border: `1px solid ${GOLD}`, color: DEEP_RED }} />
+                      </div>
+                      <div>
+                        <label className="text-xs font-bungee block mb-1" style={{ color: DEEP_RED }}>LINE 2 (cream, optional)</label>
+                        <input type="text" value={titleLine2} onChange={(e) => setTitleLine2(e.target.value)}
+                          placeholder="PRIZE WHEEL" maxLength={26}
+                          className="w-full px-3 py-2 rounded text-sm font-semibold outline-none"
+                          style={{ background: '#FFF8E7', border: `1px solid ${GOLD}`, color: DEEP_RED }} />
+                      </div>
+                    </div>
+                  </Section>
+
+                  {/* Players */}
+                  <Section title={`PLAYERS / SECTORS (${sectors.length})`} icon={Sparkles} isOpen={openSection.players} onToggle={() => toggleSection('players')}>
+                    <div className="flex justify-end gap-2 mb-2">
+                      <button onClick={() => sectors.length > 2 && removeSectorById(sectors[sectors.length - 1].id)}
+                        disabled={sectors.length <= 2}
+                        className="w-9 h-9 rounded-full flex items-center justify-center hover:scale-110 disabled:opacity-40"
+                        style={{ background: DEEP_RED, color: GOLD_LIGHT }}>
+                        <Minus size={18} />
+                      </button>
+                      <button onClick={addSector} disabled={sectors.length >= 24}
+                        className="w-9 h-9 rounded-full flex items-center justify-center hover:scale-110 disabled:opacity-40"
+                        style={{ background: DEEP_RED, color: GOLD_LIGHT }}>
+                        <Plus size={18} />
+                      </button>
+                    </div>
+                    <div className="max-h-64 overflow-y-auto pr-2 space-y-2 scroll-shadow">
+                      {sectors.map((s, i) => (
+                        <div key={s.id} className="flex items-center gap-2 p-2 rounded-lg"
+                          style={{ background: 'rgba(92,10,28,0.06)' }}>
+                          <div className="w-6 h-6 rounded-full flex-shrink-0"
+                            style={{ background: PALETTE[i % PALETTE.length], border: `2px solid ${DEEP_RED}` }} />
+                          <input type="text" value={s.label}
+                            onChange={(e) => updateSector(s.id, 'label', e.target.value)}
+                            className="flex-1 px-2 py-1 rounded text-sm font-semibold outline-none"
+                            style={{ background: '#FFF8E7', border: `1px solid ${GOLD}`, color: DEEP_RED }}
+                            placeholder={`Player ${i + 1}`} />
+                          {biased && (
+                            <input type="number" min="0" max="20" step="0.5" value={s.weight}
+                              onChange={(e) => updateSector(s.id, 'weight', Math.max(0, parseFloat(e.target.value) || 0))}
+                              className="w-14 px-2 py-1 rounded text-sm text-center outline-none"
+                              style={{ background: '#FFF8E7', border: `1px solid ${GOLD}`, color: DEEP_RED }} />
+                          )}
+                          <button onClick={() => removeSectorById(s.id)} disabled={sectors.length <= 2}
+                            className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-red-100 disabled:opacity-30"
+                            style={{ color: DEEP_RED }}>
+                            <X size={16} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="space-y-3 mt-3">
+                      <ToggleRow label="BIASED WHEEL" hint="Set custom weights per player"
+                        on={biased} onClick={() => setBiased((v) => !v)} />
+                      {biased && totalWeight > 0 && (
+                        <div className="text-xs px-3 py-2 rounded"
+                          style={{ background: 'rgba(212,160,23,0.15)', color: DEEP_RED }}>
+                          Higher number = better chance.
+                        </div>
+                      )}
+                      <ToggleRow label="REMOVE WINNER" hint="Take the slice off after their prize round"
+                        on={removeWinner} onClick={() => setRemoveWinner((v) => !v)} />
+                    </div>
+                  </Section>
+
+                  {/* Center Image */}
+                  <Section title="CENTER IMAGE" icon={ImageIcon} isOpen={openSection.image} onToggle={() => toggleSection('image')}>
+                    <input ref={fileInputRef} type="file" accept="image/*"
+                      onChange={handleFileUpload} style={{ display: 'none' }} />
+                    {!originalDataUrl ? (
+                      <button onClick={() => fileInputRef.current?.click()}
+                        className="w-full py-4 rounded-lg border-2 border-dashed transition-colors hover:bg-amber-50"
+                        style={{ borderColor: GOLD, color: DEEP_RED, background: 'rgba(212,160,23,0.05)' }}>
+                        <div className="flex items-center justify-center gap-2 font-bungee text-sm">
+                          <Upload size={16} /> UPLOAD PHOTO
+                        </div>
+                        <div className="text-xs mt-1" style={{ opacity: 0.7 }}>Background removed · Counter-rotates</div>
+                      </button>
+                    ) : (
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-16 h-16 rounded-full flex-shrink-0 overflow-hidden flex items-center justify-center"
+                            style={{ background: '#2d0510', border: `3px solid ${GOLD}`, boxShadow: `0 0 0 1px ${DEEP_RED}` }}>
+                            {processing ? (
+                              <Loader size={20} className="spin-slow" style={{ color: GOLD_LIGHT }} />
+                            ) : (
+                              userImage && <img src={userImage} alt="" className="w-full h-full object-contain" />
+                            )}
+                          </div>
+                          <div className="flex-1 flex gap-2">
+                            <button onClick={() => fileInputRef.current?.click()}
+                              className="font-bungee text-xs px-3 py-2 rounded-md flex items-center gap-1"
+                              style={{ background: DEEP_RED, color: GOLD_LIGHT }}>
+                              <ImageIcon size={12} /> CHANGE
+                            </button>
+                            <button onClick={clearImage}
+                              className="font-bungee text-xs px-3 py-2 rounded-md flex items-center gap-1"
+                              style={{ background: 'rgba(92,10,28,0.1)', color: DEEP_RED, border: `1px solid ${DEEP_RED}` }}>
+                              <Trash2 size={12} /> CLEAR
+                            </button>
+                          </div>
+                        </div>
+                        <ToggleRow label="REMOVE BACKGROUND" hint="Make backdrop transparent"
+                          on={removeBg} onClick={() => setRemoveBg((v) => !v)} />
+                        {removeBg && (
+                          <div>
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-xs font-bungee" style={{ color: DEEP_RED }}>TOLERANCE</span>
+                              <span className="font-display text-sm px-2 py-0.5 rounded"
+                                style={{ background: DEEP_RED, color: GOLD_LIGHT }}>{bgTolerance}</span>
+                            </div>
+                            <input type="range" min="10" max="120" step="2" value={bgTolerance}
+                              onChange={(e) => setBgTolerance(parseInt(e.target.value))} className="w-full" />
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </Section>
+
+                  {/* Spin */}
+                  <Section title="SPIN & CELEBRATION" icon={Volume2} isOpen={openSection.spin} onToggle={() => toggleSection('spin')}>
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="font-bungee text-xs" style={{ color: DEEP_RED }}>SPIN LENGTH</label>
+                      <span className="font-display text-sm px-3 py-0.5 rounded"
+                        style={{ background: DEEP_RED, color: GOLD_LIGHT }}>{spinDuration}s</span>
+                    </div>
+                    <input type="range" min="3" max="15" step="1" value={spinDuration}
+                      onChange={(e) => setSpinDuration(parseInt(e.target.value))} className="w-full" />
+                    <div className="flex justify-between text-xs mt-1 mb-3" style={{ color: DEEP_RED, opacity: 0.7 }}>
+                      <span>Quick</span><span>Suspenseful</span>
+                    </div>
+                    <label className="font-bungee text-xs block mb-2" style={{ color: DEEP_RED }}>CELEBRATION</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {[
+                        { v: 'confetti', label: 'CONFETTI' },
+                        { v: 'fireworks', label: 'FIREWORKS' },
+                        { v: 'stars', label: 'STARS' },
+                        { v: 'none', label: 'NONE' },
+                      ].map((opt) => (
+                        <button key={opt.v} onClick={() => setCelebration(opt.v)}
+                          className="font-bungee text-xs py-2 px-2 rounded-lg"
+                          style={{
+                            background: celebration === opt.v ? DEEP_RED : 'rgba(92,10,28,0.08)',
+                            color: celebration === opt.v ? GOLD_LIGHT : DEEP_RED,
+                            border: `2px solid ${celebration === opt.v ? GOLD : 'rgba(92,10,28,0.2)'}`,
+                          }}>
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                  </Section>
+
+                  {/* Prize Boxes */}
+                  <Section title="9 PRIZE BOXES" icon={Gift} isOpen={openSection.boxes} onToggle={() => toggleSection('boxes')}>
+                    <div className="text-xs mb-3 px-2 py-2 rounded" style={{ background: 'rgba(212,160,23,0.15)', color: DEEP_RED }}>
+                      The winner picks one of these mystery boxes after their bonus round.
+                    </div>
+                    <div className="space-y-2">
+                      {boxes.map((b, i) => (
+                        <div key={i} className="flex items-center gap-2 p-2 rounded-lg"
+                          style={{ background: 'rgba(92,10,28,0.06)' }}>
+                          <div className="w-7 h-7 rounded flex-shrink-0 flex items-center justify-center font-bungee text-xs"
+                            style={{ background: DEEP_RED, color: GOLD_LIGHT }}>{i + 1}</div>
+                          <input type="text" value={b}
+                            onChange={(e) => updateBox(i, e.target.value)}
+                            className="flex-1 px-2 py-1 rounded text-sm font-semibold outline-none"
+                            style={{ background: '#FFF8E7', border: `1px solid ${GOLD}`, color: DEEP_RED }} />
+                        </div>
+                      ))}
+                    </div>
+                  </Section>
+
+                  {/* Bonus Question (image-based) */}
+                  <Section title="BONUS QUESTION" icon={Brain} isOpen={openSection.question} onToggle={() => toggleSection('question')}>
+                    <input ref={questionImageRef} type="file" accept="image/*"
+                      onChange={handleQuestionImageUpload} style={{ display: 'none' }} />
+                    <input ref={incorrectImageRef} type="file" accept="image/*"
+                      onChange={handleIncorrectImageUpload} style={{ display: 'none' }} />
+
+                    {/* Question image */}
+                    <div>
+                      <label className="text-xs font-bungee block mb-2" style={{ color: DEEP_RED }}>QUESTION IMAGE</label>
+                      {!questionImage ? (
+                        <button onClick={() => questionImageRef.current?.click()}
+                          className="w-full py-4 rounded-lg border-2 border-dashed transition-colors hover:bg-amber-50"
+                          style={{ borderColor: GOLD, color: DEEP_RED, background: 'rgba(212,160,23,0.05)' }}>
+                          <div className="flex items-center justify-center gap-2 font-bungee text-sm">
+                            <Upload size={16} /> UPLOAD QUESTION
+                          </div>
+                          <div className="text-xs mt-1" style={{ opacity: 0.7 }}>
+                            Image with question + answer options visible
+                          </div>
+                        </button>
+                      ) : (
+                        <div className="relative">
+                          <img src={questionImage} alt="Question"
+                            className="w-full rounded-lg"
+                            style={{ border: `2px solid ${GOLD}`, maxHeight: 180, objectFit: 'contain', background: '#FFF8E7' }} />
+                          <div className="flex gap-2 mt-2">
+                            <button onClick={() => questionImageRef.current?.click()}
+                              className="flex-1 font-bungee text-xs py-2 rounded-md flex items-center justify-center gap-1"
+                              style={{ background: DEEP_RED, color: GOLD_LIGHT }}>
+                              <ImageIcon size={12} /> CHANGE
+                            </button>
+                            <button onClick={() => setQuestionImage(null)}
+                              className="font-bungee text-xs px-3 py-2 rounded-md flex items-center gap-1"
+                              style={{ background: 'rgba(92,10,28,0.1)', color: DEEP_RED, border: `1px solid ${DEEP_RED}` }}>
+                              <Trash2 size={12} />
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Correct answer selector */}
+                    <div className="mt-4">
+                      <label className="text-xs font-bungee block mb-2" style={{ color: DEEP_RED }}>CORRECT ANSWER</label>
+                      <div className="grid grid-cols-4 gap-2">
+                        {['A', 'B', 'C', 'D'].map((letter, i) => (
+                          <button key={i} onClick={() => setCorrectAnswer(i)}
+                            className="py-3 rounded-lg font-shade text-xl transition-transform hover:scale-105"
+                            style={{
+                              background: correctAnswer === i ? `linear-gradient(180deg, ${GOLD_LIGHT}, ${GOLD})` : 'rgba(92,10,28,0.08)',
+                              color: correctAnswer === i ? DEEP_RED : DEEP_RED,
+                              border: `2px solid ${correctAnswer === i ? DEEP_RED : 'rgba(92,10,28,0.3)'}`,
+                              boxShadow: correctAnswer === i ? `0 0 12px rgba(255,210,63,0.5)` : 'none',
+                            }}>
+                            {letter} {correctAnswer === i && '★'}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Incorrect picture */}
+                    <div className="mt-4">
+                      <label className="text-xs font-bungee block mb-2" style={{ color: DEEP_RED }}>"INCORRECT" PICTURE (optional)</label>
+                      {!incorrectImage ? (
+                        <button onClick={() => incorrectImageRef.current?.click()}
+                          className="w-full py-3 rounded-lg border-2 border-dashed transition-colors hover:bg-amber-50"
+                          style={{ borderColor: 'rgba(92,10,28,0.4)', color: DEEP_RED, background: 'rgba(92,10,28,0.04)' }}>
+                          <div className="flex items-center justify-center gap-2 font-bungee text-xs">
+                            <Upload size={14} /> UPLOAD WRONG-ANSWER GRAPHIC
+                          </div>
+                          <div className="text-xs mt-1" style={{ opacity: 0.6 }}>Default used if none</div>
+                        </button>
+                      ) : (
+                        <div className="relative">
+                          <img src={incorrectImage} alt=""
+                            className="w-full rounded-lg"
+                            style={{ border: `2px solid ${DEEP_RED}`, maxHeight: 140, objectFit: 'contain', background: '#FFF8E7' }} />
+                          <div className="flex gap-2 mt-2">
+                            <button onClick={() => incorrectImageRef.current?.click()}
+                              className="flex-1 font-bungee text-xs py-2 rounded-md"
+                              style={{ background: DEEP_RED, color: GOLD_LIGHT }}>CHANGE</button>
+                            <button onClick={() => setIncorrectImage(null)}
+                              className="font-bungee text-xs px-3 py-2 rounded-md"
+                              style={{ background: 'rgba(92,10,28,0.1)', color: DEEP_RED, border: `1px solid ${DEEP_RED}` }}>
+                              <Trash2 size={12} />
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Timer */}
+                    <div className="mt-4 pt-4" style={{ borderTop: `2px solid rgba(92,10,28,0.15)` }}>
+                      <ToggleRow label="FUSE TIMER" hint="Burning fuse on each side of the page"
+                        on={timerEnabled} onClick={() => setTimerEnabled((v) => !v)} />
+                      {timerEnabled && (
+                        <div className="mt-3">
+                          <div className="flex items-center justify-between mb-1">
+                            <label className="font-bungee text-xs" style={{ color: DEEP_RED }}>TIME LIMIT</label>
+                            <span className="font-display text-sm px-3 py-0.5 rounded"
+                              style={{ background: DEEP_RED, color: GOLD_LIGHT }}>{timerDuration}s</span>
+                          </div>
+                          <input type="range" min="5" max="120" step="5" value={timerDuration}
+                            onChange={(e) => setTimerDuration(parseInt(e.target.value))} className="w-full" />
+                          <div className="flex justify-between text-xs mt-1" style={{ color: DEEP_RED, opacity: 0.7 }}>
+                            <span>5s</span><span>120s</span>
+                          </div>
+                          <div className="text-xs mt-2 px-2 py-2 rounded flex items-start gap-2"
+                            style={{ background: 'rgba(200,16,46,0.1)', color: DEEP_RED }}>
+                            <AlertTriangle size={14} className="flex-shrink-0 mt-0.5" />
+                            <span>If they don't submit in time, the screen blows up and they get the wrong-answer screen.</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </Section>
+
+                  {/* Number Spinner */}
+                  <Section title="BONUS NUMBER SPINNER" icon={Trophy} isOpen={openSection.numbers} onToggle={() => toggleSection('numbers')}>
+                    <div className="text-xs mb-3 px-2 py-2 rounded" style={{ background: 'rgba(212,160,23,0.15)', color: DEEP_RED }}>
+                      Numbers represent how many people celebrate together if the winner answers correctly.
+                    </div>
+                    <div className="flex justify-end gap-2 mb-2">
+                      <button onClick={() => numberSectors.length > 2 && removeNumberSector(numberSectors[numberSectors.length - 1].id)}
+                        disabled={numberSectors.length <= 2}
+                        className="w-9 h-9 rounded-full flex items-center justify-center hover:scale-110 disabled:opacity-40"
+                        style={{ background: DEEP_RED, color: GOLD_LIGHT }}>
+                        <Minus size={18} />
+                      </button>
+                      <button onClick={addNumberSector} disabled={numberSectors.length >= 16}
+                        className="w-9 h-9 rounded-full flex items-center justify-center hover:scale-110 disabled:opacity-40"
+                        style={{ background: DEEP_RED, color: GOLD_LIGHT }}>
+                        <Plus size={18} />
+                      </button>
+                    </div>
+                    <div className="space-y-2">
+                      {numberSectors.map((s, i) => (
+                        <div key={s.id} className="flex items-center gap-2 p-2 rounded-lg"
+                          style={{ background: 'rgba(15,23,42,0.06)' }}>
+                          <div className="w-6 h-6 rounded-full flex-shrink-0"
+                            style={{ background: INVERSE_PALETTE[i % INVERSE_PALETTE.length], border: `2px solid ${NIGHT}` }} />
+                          <input type="text" value={s.label} maxLength={4}
+                            onChange={(e) => updateNumberSector(s.id, e.target.value.replace(/[^0-9]/g, ''))}
+                            className="flex-1 px-2 py-1 rounded text-sm font-bold text-center outline-none"
+                            style={{ background: '#FFF8E7', border: `1px solid ${GOLD}`, color: DEEP_RED }} />
+                          <button onClick={() => removeNumberSector(s.id)} disabled={numberSectors.length <= 2}
+                            className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-red-100 disabled:opacity-30"
+                            style={{ color: DEEP_RED }}>
+                            <X size={16} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </Section>
+                </div>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* ============== BONUS CHOICE ============== */}
+      {view === 'choice' && (
+        <div className="relative z-10 min-h-screen flex flex-col items-center justify-center px-4 fade-in">
+          <PrizeRoundHeader />
+          <div className="max-w-3xl w-full text-center">
+            <p className="font-bungee text-xs sm:text-sm tracking-widest mb-2" style={{ color: GOLD_LIGHT }}>
+              ✦  ROUND OF PRIZES  ✦
+            </p>
+            <h2 className="font-shade text-5xl sm:text-7xl mb-2 title-shimmer" style={{ color: GOLD_LIGHT, lineHeight: 1 }}>
+              DOUBLE OR NOTHING?
+            </h2>
+            <p className="font-display text-xl mt-6 mb-10" style={{ color: '#FDF6E3', lineHeight: 1.4 }}>
+              Take the bonus challenge to spin for a celebration multiplier — or skip straight to picking a prize.
+            </p>
+            <div className="grid sm:grid-cols-2 gap-5 max-w-2xl mx-auto">
+              <button onClick={takeBonus} className="answer-btn rounded-2xl p-6 text-left pulse-glow">
+                <div className="flex items-center justify-between mb-3">
+                  <Brain size={36} />
+                  <span className="font-display text-2xl">BONUS</span>
+                </div>
+                <div className="font-shade text-2xl mb-1">TAKE THE CHALLENGE</div>
+                <p className="text-sm font-bungee opacity-80">Beat the fuse · Answer correctly to spin the multiplier</p>
+              </button>
+              <button onClick={skipBonus} className="answer-btn rounded-2xl p-6 text-left">
+                <div className="flex items-center justify-between mb-3">
+                  <FastForward size={36} />
+                  <span className="font-display text-2xl">SKIP</span>
+                </div>
+                <div className="font-shade text-2xl mb-1">GO TO PRIZES</div>
+                <p className="text-sm font-bungee opacity-80">Pick a mystery box · Solo celebration</p>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ============== QUESTION ============== */}
+      {view === 'question' && (
+        <div className={`relative z-10 min-h-screen flex flex-col items-center justify-center px-20 sm:px-24 py-20 fade-in ${timerUrgent ? 'urgent-tint' : ''}`}>
+          <PrizeRoundHeader />
+
+          {/* Fuses */}
+          {timerEnabled && (
+            <>
+              <Fuse side="left"  progress={timerProgress} expired={timerExpired} urgent={timerUrgent} />
+              <Fuse side="right" progress={timerProgress} expired={timerExpired} urgent={timerUrgent} />
+            </>
+          )}
+
+          <div className="max-w-4xl w-full text-center">
+            <p className="font-bungee text-sm tracking-widest mb-2" style={{ color: GOLD_LIGHT }}>
+              ✦  BONUS CHALLENGE  ✦
+            </p>
+
+            {/* Timer display */}
+            {timerEnabled && (
+              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full mb-4"
+                style={{
+                  background: timerUrgent ? 'rgba(200,16,46,0.3)' : 'rgba(0,0,0,0.3)',
+                  border: `2px solid ${timerUrgent ? '#C8102E' : GOLD}`,
+                }}>
+                <Clock size={18} style={{ color: timerUrgent ? '#FFD23F' : GOLD_LIGHT }} />
+                <span className="font-shade text-2xl" style={{ color: timerUrgent ? '#FFD23F' : '#FDF6E3' }}>
+                  {Math.ceil(timeLeft)}s
+                </span>
+              </div>
+            )}
+
+            {/* Question image */}
+            <div className="mb-6">
+              {questionImage ? (
+                <img src={questionImage} alt="Question"
+                  className="mx-auto rounded-xl"
+                  style={{
+                    maxHeight: '40vh',
+                    maxWidth: '100%',
+                    border: `4px solid ${GOLD}`,
+                    boxShadow: `0 0 0 2px ${DEEP_RED}, 0 12px 32px rgba(0,0,0,0.5)`,
+                    background: '#FFF8E7',
+                  }} />
+              ) : (
+                <div className="mx-auto rounded-xl p-12 max-w-lg"
+                  style={{
+                    background: 'rgba(245,230,200,0.1)',
+                    border: `4px dashed ${GOLD}`,
+                    color: CREAM,
+                  }}>
+                  <ImageIcon size={48} className="mx-auto mb-3" style={{ color: GOLD_LIGHT, opacity: 0.5 }} />
+                  <p className="font-bungee text-sm">No question image uploaded.</p>
+                  <p className="font-bungee text-xs mt-1 opacity-60">Add one in Midway Controls → Bonus Question.</p>
+                </div>
+              )}
+            </div>
+
+            {/* Letter buttons */}
+            <p className="font-bungee text-xs mb-3" style={{ color: GOLD_LIGHT, opacity: 0.8 }}>
+              CHOOSE YOUR ANSWER
+            </p>
+            <div className="grid grid-cols-4 gap-3 max-w-2xl mx-auto">
+              {['A', 'B', 'C', 'D'].map((letter, i) => (
+                <button key={i} onClick={() => !timerExpired && setStudentAnswer(i)}
+                  disabled={timerExpired}
+                  className={`answer-btn rounded-xl py-6 ${studentAnswer === i ? 'selected' : ''}`}>
+                  <div className="font-shade text-4xl sm:text-5xl">{letter}</div>
+                </button>
+              ))}
+            </div>
+
+            <button onClick={submitAnswer} disabled={studentAnswer === null || timerExpired}
+              className={`mt-8 font-shade text-2xl px-12 py-4 rounded-full transition-transform inline-flex items-center gap-3 ${
+                (studentAnswer === null || timerExpired) ? 'opacity-40 cursor-not-allowed' : 'hover:scale-105 spin-btn-pulse'
+              }`}
+              style={{
+                background: `linear-gradient(180deg, ${GOLD_LIGHT}, ${GOLD} 45%, #8B6914)`,
+                color: DEEP_RED, border: `4px solid ${DEEP_RED}`,
+              }}>
+              SUBMIT ANSWER <Send size={22} />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ============== VERDICT ============== */}
+      {view === 'verdict' && (
+        <div className="relative z-10 min-h-screen flex flex-col items-center justify-center px-4 py-20 fade-in">
+          <PrizeRoundHeader />
+          <div className="max-w-3xl w-full text-center">
+            <p className="font-bungee text-sm tracking-widest mb-2" style={{ color: GOLD_LIGHT }}>
+              ✦  TEACHER · MARK THE ANSWER  ✦
+            </p>
+
+            {questionImage && (
+              <img src={questionImage} alt="Question"
+                className="mx-auto rounded-xl mb-6"
+                style={{
+                  maxHeight: '30vh', maxWidth: '100%',
+                  border: `3px solid ${GOLD}`,
+                  background: '#FFF8E7',
+                }} />
+            )}
+
+            <div className="panel-card rounded-2xl p-6 max-w-2xl mx-auto mb-10 text-left">
+              <div className="mb-4">
+                <div className="font-bungee text-xs mb-1" style={{ color: DEEP_RED, opacity: 0.7 }}>STUDENT CHOSE</div>
+                <div className="font-shade text-4xl" style={{ color: DEEP_RED }}>
+                  {['A', 'B', 'C', 'D'][studentAnswer]}
+                </div>
+              </div>
+              <div className="border-t-2 pt-4" style={{ borderColor: 'rgba(92,10,28,0.2)' }}>
+                <div className="font-bungee text-xs mb-1" style={{ color: DEEP_RED, opacity: 0.7 }}>CORRECT ANSWER</div>
+                <div className="font-shade text-3xl flex items-center gap-2" style={{ color: DEEP_RED }}>
+                  ★ {['A', 'B', 'C', 'D'][correctAnswer]}
+                </div>
+                <div className="text-xs mt-2 font-bungee"
+                  style={{ color: studentAnswer === correctAnswer ? '#0F8B8D' : '#C8102E' }}>
+                  {studentAnswer === correctAnswer ? '— Matches the student\'s answer' : '— Differs from the student\'s answer'}
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4 max-w-xl mx-auto">
+              <button onClick={markCorrect}
+                className="font-shade text-xl sm:text-2xl py-5 rounded-2xl flex flex-col items-center gap-1 transition-transform hover:scale-105"
+                style={{
+                  background: 'linear-gradient(180deg, #10B981, #059669)',
+                  color: '#FDF6E3', border: `4px solid #047857`,
+                  boxShadow: '0 8px 0 #047857',
+                }}>
+                <Check size={32} /> CORRECT
+              </button>
+              <button onClick={markIncorrect}
+                className="font-shade text-xl sm:text-2xl py-5 rounded-2xl flex flex-col items-center gap-1 transition-transform hover:scale-105"
+                style={{
+                  background: 'linear-gradient(180deg, #EF4444, #B91C1C)',
+                  color: '#FDF6E3', border: `4px solid #7F1D1D`,
+                  boxShadow: '0 8px 0 #7F1D1D',
+                }}>
+                <X size={32} /> INCORRECT
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ============== WRONG RESULT ============== */}
+      {view === 'wrongResult' && (
+        <div className="relative z-10 min-h-screen flex flex-col items-center justify-center px-4 py-20 fade-in">
+          <PrizeRoundHeader />
+          <div className="max-w-2xl w-full text-center">
+            <p className="font-bungee text-sm tracking-widest mb-2" style={{ color: '#FFD23F' }}>
+              {bonusOutcome === 'timeout' ? '✦  TIME\'S UP  ✦' : '✦  NOT QUITE  ✦'}
+            </p>
+            <h2 className="font-shade text-5xl sm:text-6xl mb-6" style={{ color: '#C8102E', lineHeight: 1 }}>
+              {bonusOutcome === 'timeout' ? 'BOOM!' : 'WRONG ANSWER'}
+            </h2>
+
+            <div className="mx-auto mb-6 max-w-md">
+              {incorrectImage ? (
+                <img src={incorrectImage} alt="Incorrect"
+                  className="w-full rounded-xl"
+                  style={{
+                    border: `4px solid ${GOLD}`,
+                    boxShadow: `0 0 0 2px ${DEEP_RED}, 0 12px 32px rgba(0,0,0,0.5)`,
+                    background: '#FFF8E7',
+                  }} />
+              ) : (
+                <DefaultIncorrectGraphic isTimeout={bonusOutcome === 'timeout'} />
+              )}
+            </div>
+
+            <p className="font-display text-xl mb-8" style={{ color: '#FDF6E3' }}>
+              {bonusOutcome === 'timeout'
+                ? 'You ran out of time! Solo prize coming up.'
+                : 'No multiplier this round, but still a prize!'}
+            </p>
+
+            <button onClick={continueFromWrong}
+              className="font-shade text-2xl px-12 py-4 rounded-full transition-transform hover:scale-105 inline-flex items-center gap-3"
+              style={{
+                background: `linear-gradient(180deg, ${GOLD_LIGHT}, ${GOLD} 45%, #8B6914)`,
+                color: DEEP_RED, border: `4px solid ${DEEP_RED}`,
+              }}>
+              PICK A PRIZE <Gift size={22} />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ============== NUMBER SPIN ============== */}
+      {view === 'numberSpin' && (
+        <div className="relative z-10 min-h-screen flex flex-col items-center justify-center px-4 py-20 fade-in">
+          <PrizeRoundHeader palette="inverse" />
+          <div className="text-center mb-4">
+            <p className="font-bungee text-xs sm:text-sm tracking-widest" style={{ color: SILVER_LIGHT }}>
+              ✦  YOU GOT IT RIGHT — SPIN FOR CELEBRATION SIZE  ✦
+            </p>
+            <h2 className="font-shade title-shimmer-cool text-4xl sm:text-6xl mt-2" style={{ color: SILVER_LIGHT, lineHeight: 1 }}>
+              HOW MANY<br /><span style={{ color: '#A78BFA' }}>CELEBRATE?</span>
+            </h2>
+          </div>
+
+          <div className="relative w-full max-w-[600px] aspect-square">
+            <div className="absolute inset-2 rounded-full ornate-border-cool" style={{ padding: 14 }} />
+            <div className="absolute rounded-full"
+              style={{ inset: 16, background: NIGHT_DARK, boxShadow: 'inset 0 0 30px rgba(0,0,0,0.7)' }} />
+            {renderWheelSVG({
+              sectorList: numberSectors, rotationVal: numberRotation,
+              palette: INVERSE_PALETTE, textColors: INVERSE_TEXT,
+              accent: SILVER, accentLight: SILVER_LIGHT, border: NIGHT,
+              centerImg: null,
+              marqueeOnFill: '#F0F9FF', marqueeOffFill: '#475569',
+              lightGlow: 'rgba(167,139,250,0.7)',
+            })}
+            <div className="absolute left-1/2 -translate-x-1/2 pointer-shadow" style={{ top: -6, zIndex: 5 }}>
+              <svg width="56" height="80" viewBox="0 0 56 80">
+                <defs>
+                  <linearGradient id="pSilver" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#F0F9FF" />
+                    <stop offset="50%" stopColor="#94A3B8" />
+                    <stop offset="100%" stopColor="#334155" />
+                  </linearGradient>
+                </defs>
+                <path d="M 28 0 L 50 20 L 36 30 L 28 76 L 20 30 L 6 20 Z"
+                  fill="url(#pSilver)" stroke={NIGHT} strokeWidth="3" strokeLinejoin="round" />
+                <circle cx="28" cy="18" r="4" fill="#F0F9FF" />
+              </svg>
+            </div>
+          </div>
+
+          {!numberWinner ? (
+            <button onClick={spinNumberWheel} disabled={numberSpinning}
+              className={`mt-8 font-shade text-3xl px-16 py-5 rounded-full transition-transform ${
+                numberSpinning ? 'opacity-60 cursor-not-allowed' : 'spin-btn-pulse-cool hover:scale-105'
+              }`}
+              style={{
+                background: `linear-gradient(180deg, ${SILVER_LIGHT}, ${SILVER} 50%, #475569)`,
+                color: NIGHT, border: `4px solid ${NIGHT}`,
+              }}>
+              {numberSpinning ? 'SPINNING…' : 'SPIN!'}
+            </button>
+          ) : (
+            <div className="mt-8 text-center">
+              <p className="font-bungee text-sm" style={{ color: SILVER_LIGHT, opacity: 0.8 }}>YOU LANDED ON</p>
+              <div className="font-shade text-7xl sm:text-8xl my-2" style={{ color: '#A78BFA' }}>
+                {numberWinner.label}
+              </div>
+              <p className="font-display text-xl mb-6" style={{ color: SILVER_LIGHT }}>
+                {parseInt(numberWinner.label) === 1 ? 'person celebrates!' : 'people celebrate together!'}
+              </p>
+              <button onClick={continueFromNumberSpin}
+                className="font-shade text-xl px-10 py-3 rounded-full transition-transform hover:scale-105 inline-flex items-center gap-2"
+                style={{
+                  background: `linear-gradient(180deg, ${SILVER_LIGHT}, ${SILVER})`,
+                  color: NIGHT, border: `4px solid ${NIGHT}`,
+                }}>
+                PICK A PRIZE <Gift size={20} />
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ============== BOXES ============== */}
+      {view === 'boxes' && (
+        <div className="relative z-10 min-h-screen flex flex-col items-center justify-center px-4 py-20 fade-in">
+          <PrizeRoundHeader />
+          <div className="max-w-4xl w-full text-center">
+            <p className="font-bungee text-xs sm:text-sm tracking-widest" style={{ color: GOLD_LIGHT }}>
+              ✦  PICK A MYSTERY BOX  ✦
+            </p>
+            <h2 className="font-shade title-shimmer text-4xl sm:text-6xl mt-2 mb-2" style={{ color: GOLD_LIGHT, lineHeight: 1 }}>
+              WHAT'S INSIDE?
+            </h2>
+            {bonusOutcome === 'correct' && celebrationCount > 1 && (
+              <p className="font-display text-lg mb-2" style={{ color: '#FDF6E3' }}>
+                {celebrationCount} people will celebrate this prize together!
+              </p>
+            )}
+
+            <div className="grid grid-cols-3 gap-3 sm:gap-5 max-w-2xl mx-auto mt-8">
+              {boxes.map((b, i) => {
+                const isPicked = selectedBox === i;
+                const isOther = selectedBox !== null && selectedBox !== i;
+                return (
+                  <button key={i} onClick={() => selectBox(i)}
+                    disabled={selectedBox !== null}
+                    className={`relative aspect-square rounded-xl ${isPicked ? 'box-open' : ''} ${isOther ? 'opacity-30' : ''}`}
+                    style={{
+                      background: isPicked
+                        ? `linear-gradient(135deg, ${GOLD_LIGHT}, ${GOLD})`
+                        : 'linear-gradient(135deg, #C8102E, #8B0F2A)',
+                      border: `4px solid ${isPicked ? DEEP_RED : GOLD}`,
+                      boxShadow: isPicked
+                        ? `0 0 30px rgba(255,210,63,0.8), 0 0 0 2px ${DEEP_RED}`
+                        : '0 6px 0 rgba(0,0,0,0.4)',
+                      transition: 'opacity 0.3s, transform 0.2s',
+                    }}>
+                    {!isPicked ? (
+                      <>
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <span className="font-shade text-5xl sm:text-7xl" style={{ color: GOLD_LIGHT, textShadow: '4px 4px 0 rgba(0,0,0,0.4)' }}>?</span>
+                        </div>
+                        <div className="absolute top-1 left-1 right-1 h-2 rounded-t" style={{ background: GOLD_LIGHT, opacity: 0.3 }} />
+                      </>
+                    ) : (
+                      <div className="absolute inset-0 flex flex-col items-center justify-center p-2 text-center">
+                        <Gift size={28} style={{ color: DEEP_RED }} />
+                        <div className="font-shade text-base sm:text-xl mt-2 break-words" style={{ color: DEEP_RED, lineHeight: 1.1 }}>
+                          {b}
+                        </div>
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            {selectedBox === null && (
+              <p className="font-bungee text-xs mt-6" style={{ color: '#FDF6E3', opacity: 0.6 }}>
+                Click any box to reveal what's inside.
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ============== FINAL CELEBRATION ============== */}
+      {view === 'final' && (
+        <div className="relative z-10 min-h-screen flex flex-col items-center justify-center px-4 py-20 fade-in">
+          <div className="max-w-3xl w-full text-center">
+            <Trophy size={80} className="mx-auto mb-4" style={{ color: GOLD_LIGHT }} />
+            <p className="font-bungee text-sm tracking-widest mb-1" style={{ color: GOLD_LIGHT }}>
+              ✦  PRIZE AWARDED  ✦
+            </p>
+            <h2 className="font-shade title-shimmer text-4xl sm:text-6xl mb-2" style={{ color: GOLD_LIGHT, lineHeight: 1 }}>
+              {winner?.label?.toUpperCase()}
+            </h2>
+            <p className="font-display text-xl mb-1" style={{ color: '#FDF6E3' }}>WINS</p>
+            <div className="font-shade text-3xl sm:text-5xl my-4 px-6 py-4 rounded-2xl inline-block"
+              style={{
+                background: `linear-gradient(135deg, ${GOLD_LIGHT}, ${GOLD})`,
+                color: DEEP_RED, border: `4px solid ${DEEP_RED}`,
+                boxShadow: `0 0 0 3px ${GOLD_LIGHT}, 0 12px 32px rgba(0,0,0,0.5)`,
+                lineHeight: 1.1,
+              }}>
+              {selectedBox !== null ? boxes[selectedBox] : ''}
+            </div>
+
+            <div className="mt-8 mb-10">
+              {celebrationCount > 1 ? (
+                <>
+                  <p className="font-display text-xl" style={{ color: '#FDF6E3' }}>And</p>
+                  <div className="font-shade text-7xl sm:text-8xl my-2" style={{ color: GOLD_LIGHT }}>
+                    {celebrationCount}
+                  </div>
+                  <p className="font-display text-xl" style={{ color: '#FDF6E3' }}>
+                    PEOPLE GET TO CELEBRATE TOGETHER!
+                  </p>
+                </>
+              ) : (
+                <p className="font-display text-2xl" style={{ color: '#FDF6E3' }}>
+                  Solo celebration — well earned!
+                </p>
+              )}
+            </div>
+
+            <button onClick={finishPrizeRound}
+              className="font-shade text-2xl px-12 py-4 rounded-full transition-transform hover:scale-105"
+              style={{
+                background: `linear-gradient(180deg, ${GOLD_LIGHT}, ${GOLD} 45%, #8B6914)`,
+                color: DEEP_RED, border: `4px solid ${DEEP_RED}`,
+              }}>
+              BACK TO WHEEL
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div className={`h-3 w-full relative z-10 ${view === 'numberSpin' ? 'tent-stripes-cool' : 'tent-stripes'}`} />
+
+      <canvas ref={celebCanvasRef} className="fixed inset-0 pointer-events-none z-40"
+        style={{ width: '100vw', height: '100vh' }} />
+
+      {/* BOOM overlay (timer expired) */}
+      {showBoom && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none">
+          <div className="absolute inset-0 flash-overlay"
+            style={{ background: 'radial-gradient(ellipse at center, rgba(255,210,63,0.95) 0%, rgba(255,107,53,0.7) 30%, rgba(200,16,46,0.4) 60%, transparent 90%)' }} />
+          <div className="boom-text font-shade text-8xl sm:text-9xl"
+            style={{ color: '#FFD23F', textShadow: '6px 6px 0 #C8102E, 12px 12px 0 rgba(0,0,0,0.6)' }}>
+            BOOM!
+          </div>
+        </div>
+      )}
+
+      {/* Winner modal */}
+      {showWinner && winner && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)' }}
+          onClick={skipPrizeRound}>
+          <div className="winner-pop relative max-w-lg w-full text-center px-8 py-10 rounded-3xl"
+            style={{
+              background: `linear-gradient(135deg, ${GOLD_LIGHT}, ${GOLD} 50%, ${GOLD_LIGHT})`,
+              border: `6px solid ${DEEP_RED}`,
+              boxShadow: `0 0 0 3px ${GOLD_LIGHT}, 0 30px 60px rgba(0,0,0,0.6)`,
+            }}
+            onClick={(e) => e.stopPropagation()}>
+            <div className="font-bungee text-sm mb-2" style={{ color: DEEP_RED }}>
+              ★  WE HAVE A WINNER  ★
+            </div>
+            <div className="font-display text-2xl mb-1" style={{ color: DEEP_RED }}>CONGRATULATIONS!</div>
+            <div className="font-shade text-4xl sm:text-5xl my-6 break-words" style={{ color: DEEP_RED, lineHeight: 1.05 }}>
+              {winner.label.toUpperCase()}
+            </div>
+            <div className="flex flex-col gap-3">
+              <button onClick={goToPrizeRound}
+                className="font-shade text-lg sm:text-xl px-6 py-3 rounded-full transition-transform hover:scale-105 inline-flex items-center justify-center gap-2"
+                style={{ background: DEEP_RED, color: GOLD_LIGHT, border: `3px solid ${DEEP_RED}` }}>
+                CONTINUE TO PRIZE ROUND <Gift size={20} />
+              </button>
+              <button onClick={skipPrizeRound}
+                className="font-bungee text-sm px-6 py-2 rounded-full transition-colors"
+                style={{ background: 'transparent', color: DEEP_RED, border: `2px solid ${DEEP_RED}` }}>
+                {removeWinner ? 'REMOVE & SPIN AGAIN' : 'SPIN AGAIN'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ===================== Helper components =====================
+
+function ToggleRow({ label, hint, on, onClick }) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <div className="flex-1">
+        <div className="font-bungee text-sm" style={{ color: DEEP_RED }}>{label}</div>
+        {hint && <div className="text-xs mt-0.5" style={{ color: DEEP_RED, opacity: 0.7 }}>{hint}</div>}
+      </div>
+      <div className={`toggle-track ${on ? 'on' : ''}`} onClick={onClick}>
+        <div className="toggle-thumb" />
+      </div>
+    </div>
+  );
+}
+
+function Section({ title, icon: Icon, isOpen, onToggle, children }) {
+  return (
+    <div className="rounded-lg overflow-hidden" style={{ border: `2px solid rgba(92,10,28,0.15)` }}>
+      <button onClick={onToggle}
+        className="w-full px-4 py-3 flex justify-between items-center transition-colors"
+        style={{ background: isOpen ? `linear-gradient(90deg, rgba(92,10,28,0.08), rgba(212,160,23,0.1))` : 'rgba(92,10,28,0.04)' }}>
+        <div className="flex items-center gap-2">
+          {Icon && <Icon size={16} style={{ color: DEEP_RED }} />}
+          <span className="font-bungee text-sm" style={{ color: DEEP_RED }}>{title}</span>
+        </div>
+        {isOpen ? <ChevronUp size={18} style={{ color: DEEP_RED }} /> : <ChevronDown size={18} style={{ color: DEEP_RED }} />}
+      </button>
+      {isOpen && <div className="p-3">{children}</div>}
+    </div>
+  );
+}
+
+function Fuse({ side, progress, expired, urgent }) {
+  // progress: 1.0 = full time, 0.0 = expired
+  // Rope sits at the bottom; flame sits at the top of the rope (where the burn line is).
+  const ropePct = progress * 100;
+  const flameTopPct = 100 - ropePct; // flame y position from top
+  const sideStyle = side === 'left' ? { left: 8 } : { right: 8 };
+
+  return (
+    <div className="fixed top-0 bottom-0 z-30 pointer-events-none"
+      style={{ ...sideStyle, width: 36 }}>
+      {/* Rope (unburned) */}
+      <div
+        className="fuse-rope-bg absolute bottom-0 left-0 right-0"
+        style={{ height: `${ropePct}%`, transition: 'height 0.05s linear' }}
+      />
+      {/* Flame at the burning tip */}
+      {!expired && progress > 0.005 && (
+        <div className="absolute left-1/2 -translate-x-1/2"
+          style={{
+            top: `calc(${flameTopPct}% - 28px)`,
+            width: 56, height: 56,
+            transition: 'top 0.05s linear',
+          }}>
+          <svg viewBox="0 0 60 60" className={`flame-flicker ${urgent ? 'flame-urgent' : ''}`}
+            style={{ width: '100%', height: '100%' }}>
+            <defs>
+              <radialGradient id={`flameOuter_${side}`} cx="50%" cy="80%" r="55%">
+                <stop offset="0%" stopColor="#FFD23F" />
+                <stop offset="50%" stopColor="#FF6B35" />
+                <stop offset="100%" stopColor="#C8102E" stopOpacity="0.7" />
+              </radialGradient>
+              <radialGradient id={`flameInner_${side}`} cx="50%" cy="85%" r="40%">
+                <stop offset="0%" stopColor="#FFFFFF" />
+                <stop offset="60%" stopColor="#FFD23F" />
+                <stop offset="100%" stopColor="#FF6B35" stopOpacity="0" />
+              </radialGradient>
+            </defs>
+            {/* Outer flame */}
+            <path d="M 30 58 Q 8 50, 14 28 Q 20 14, 18 4 Q 28 22, 34 10 Q 42 26, 40 40 Q 48 52, 30 58 Z"
+              fill={`url(#flameOuter_${side})`} />
+            {/* Inner flame */}
+            <path d="M 30 52 Q 18 46, 22 30 Q 26 20, 28 12 Q 32 24, 34 30 Q 38 42, 30 52 Z"
+              fill={`url(#flameInner_${side})`} />
+          </svg>
+          {/* Sparks */}
+          <div className="spark" style={{ left: 8, top: 4, animationDelay: '0s', '--dx': '-6px' }} />
+          <div className="spark" style={{ left: 26, top: 8, animationDelay: '0.3s', '--dx': '4px' }} />
+          <div className="spark" style={{ left: 16, top: 0, animationDelay: '0.6s', '--dx': '8px' }} />
+          {urgent && (
+            <div className="spark" style={{ left: 22, top: 6, animationDelay: '0.15s', background: '#FFFFFF', '--dx': '-4px' }} />
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DefaultIncorrectGraphic({ isTimeout }) {
+  return (
+    <svg viewBox="0 0 400 400" className="w-full max-w-xs mx-auto"
+      style={{
+        filter: 'drop-shadow(0 8px 16px rgba(0,0,0,0.4))',
+        background: '#FFF8E7',
+        borderRadius: 16,
+        border: `4px solid ${GOLD}`,
+      }}>
+      {/* Background burst */}
+      <defs>
+        <radialGradient id="redBurst" cx="50%" cy="50%" r="60%">
+          <stop offset="0%" stopColor="#FFE066" />
+          <stop offset="35%" stopColor="#FFD23F" />
+          <stop offset="100%" stopColor="#FFF8E7" />
+        </radialGradient>
+      </defs>
+      <rect width="400" height="400" fill="url(#redBurst)" />
+      {/* Starburst rays */}
+      {Array.from({ length: 12 }).map((_, i) => {
+        const angle = (i / 12) * Math.PI * 2;
+        const x1 = 200 + Math.cos(angle) * 40;
+        const y1 = 200 + Math.sin(angle) * 40;
+        const x2 = 200 + Math.cos(angle) * 200;
+        const y2 = 200 + Math.sin(angle) * 200;
+        return <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke="#C8102E" strokeWidth="6" opacity="0.25" />;
+      })}
+      {/* Big X */}
+      <line x1="100" y1="100" x2="300" y2="300" stroke="#C8102E" strokeWidth="44" strokeLinecap="round" />
+      <line x1="300" y1="100" x2="100" y2="300" stroke="#C8102E" strokeWidth="44" strokeLinecap="round" />
+      {/* Inner highlight */}
+      <line x1="100" y1="100" x2="300" y2="300" stroke="#FF6B35" strokeWidth="14" strokeLinecap="round" opacity="0.6" />
+      <line x1="300" y1="100" x2="100" y2="300" stroke="#FF6B35" strokeWidth="14" strokeLinecap="round" opacity="0.6" />
+      {/* Label */}
+      <text x="200" y="378" textAnchor="middle" fill="#5C0A1C"
+        fontSize="34" fontFamily="Bungee, Alfa Slab One, sans-serif" fontWeight="bold"
+        stroke="#FFD23F" strokeWidth="2" paintOrder="stroke">
+        {isTimeout ? 'TIME\'S UP!' : 'INCORRECT'}
+      </text>
+    </svg>
+  );
+}
+
+    // ========== Mount ==========
+    const rootEl = document.getElementById('root');
+    rootEl.innerHTML = '';
+    const root = ReactDOM.createRoot(rootEl);
+    root.render(<CarnivalSpinner />);
+  </script>
+</body>
+</html>
