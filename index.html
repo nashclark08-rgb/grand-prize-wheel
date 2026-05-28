@@ -300,6 +300,11 @@ function CarnivalSpinner() {
   const [selectedBox, setSelectedBox] = useState(null);
   const [bonusOutcome, setBonusOutcome] = useState(null); // 'skipped' | 'correct' | 'incorrect' | 'timeout'
 
+  // When backing into the question screen from verdict, we don't want the fuse
+  // timer to restart — the student has already submitted, the teacher is just
+  // letting them re-read. Consumed once on next question-view entry.
+  const [skipTimerOnce, setSkipTimerOnce] = useState(false);
+
   // ----- Refs -----
   const audioCtxRef = useRef(null);
   const lastSectorRef = useRef(-1);
@@ -359,6 +364,14 @@ function CarnivalSpinner() {
   useEffect(() => {
     if (view !== 'question' || !timerEnabled) {
       setTimeLeft(timerDuration);
+      setTimerExpired(false);
+      if (timerRafRef.current) cancelAnimationFrame(timerRafRef.current);
+      return;
+    }
+
+    // Re-entering question via "Back" from verdict: skip the countdown.
+    if (skipTimerOnce) {
+      setSkipTimerOnce(false);
       setTimerExpired(false);
       if (timerRafRef.current) cancelAnimationFrame(timerRafRef.current);
       return;
@@ -738,9 +751,63 @@ function CarnivalSpinner() {
   };
   const exitToMain = () => {
     if (timerRafRef.current) cancelAnimationFrame(timerRafRef.current);
+    if (numberAnimFrameRef.current) cancelAnimationFrame(numberAnimFrameRef.current);
     setView('main');
     setSelectedBox(null); setStudentAnswer(null); setNumberWinner(null);
     setCelebrationCount(1); setBonusOutcome(null); setTimerExpired(false);
+    setSkipTimerOnce(false);
+  };
+
+  // Step-back one screen. Each prize-round screen knows its safe back target
+  // and cleans up its own in-flight state (timer, number-wheel anim) on exit.
+  const goBack = () => {
+    switch (view) {
+      case 'choice':
+        // Back to the winner modal so they can spin again or re-enter prize round.
+        setView('main');
+        if (winner) setShowWinner(true);
+        return;
+      case 'question':
+        if (timerRafRef.current) cancelAnimationFrame(timerRafRef.current);
+        setStudentAnswer(null);
+        setTimerExpired(false);
+        setView('choice');
+        return;
+      case 'verdict':
+        // Re-show the question without restarting the fuse.
+        setSkipTimerOnce(true);
+        setView('question');
+        return;
+      case 'wrongResult':
+        // Undo an "Incorrect" / timeout mark, return to verdict.
+        setBonusOutcome(null);
+        setView('verdict');
+        return;
+      case 'numberSpin':
+        // Undo a "Correct" mark, return to verdict.
+        if (numberAnimFrameRef.current) cancelAnimationFrame(numberAnimFrameRef.current);
+        setNumberWinner(null);
+        setNumberRotation(0);
+        setNumberSpinning(false);
+        setBonusOutcome(null);
+        setView('verdict');
+        return;
+      case 'boxes':
+        setSelectedBox(null);
+        if (bonusOutcome === 'skipped') {
+          setBonusOutcome(null);
+          setCelebrationCount(1);
+          setView('choice');
+        } else if (bonusOutcome === 'correct') {
+          setView('numberSpin');
+        } else {
+          // 'incorrect' or 'timeout'
+          setView('wrongResult');
+        }
+        return;
+      default:
+        return;
+    }
   };
 
   // ----- Celebration & explosion canvas -----
@@ -1024,19 +1091,37 @@ function CarnivalSpinner() {
 
   const PrizeRoundHeader = ({ palette = 'carnival' }) => {
     const isInverse = palette === 'inverse';
+    // Back is available on every prize-round screen except 'final' (already celebrated).
+    const showBack = view !== 'final';
     return (
       <div className="absolute top-0 left-0 right-0 z-20 px-4 py-3 flex items-center justify-between">
-        <button
-          onClick={exitToMain}
-          className="font-bungee text-xs px-3 py-2 rounded-full flex items-center gap-1 transition-transform hover:scale-105"
-          style={{
-            background: isInverse ? 'rgba(255,255,255,0.08)' : 'rgba(245,230,200,0.12)',
-            color: isInverse ? SILVER_LIGHT : CREAM,
-            border: `2px solid ${isInverse ? SILVER : GOLD}`,
-          }}
-        >
-          <ArrowLeft size={14} /> EXIT
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={exitToMain}
+            className="font-bungee text-xs px-3 py-2 rounded-full flex items-center gap-1 transition-transform hover:scale-105"
+            style={{
+              background: isInverse ? 'rgba(255,255,255,0.08)' : 'rgba(245,230,200,0.12)',
+              color: isInverse ? SILVER_LIGHT : CREAM,
+              border: `2px solid ${isInverse ? SILVER : GOLD}`,
+            }}
+          >
+            <X size={14} /> EXIT
+          </button>
+          {showBack && (
+            <button
+              onClick={goBack}
+              className="font-bungee text-xs px-3 py-2 rounded-full flex items-center gap-1 transition-transform hover:scale-105"
+              style={{
+                background: isInverse ? 'rgba(255,255,255,0.05)' : 'rgba(245,230,200,0.08)',
+                color: isInverse ? SILVER_LIGHT : CREAM,
+                border: `2px solid ${isInverse ? SILVER : GOLD}`,
+                opacity: 0.85,
+              }}
+            >
+              <ArrowLeft size={14} /> BACK
+            </button>
+          )}
+        </div>
         {winner && (
           <div className="text-center px-3 py-2 rounded-full"
             style={{
