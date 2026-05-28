@@ -119,6 +119,28 @@ const DEFAULT_BOXES = [
 ];
 const DEFAULT_NUMBERS = ['2', '4', '6', '3', '8', '5', '10', '1'];
 
+// ---------- localStorage persistence ----------
+// Persists teacher's setup across reloads. Images intentionally excluded
+// (base64 data-URLs blow the 5MB localStorage quota). Bump the version key
+// if the saved shape ever changes incompatibly.
+const STORAGE_KEY = 'gpw_config_v1';
+const PERSIST_KEYS = [
+  'titleLine1', 'titleLine2', 'sectors', 'biased', 'removeWinner',
+  'spinDuration', 'celebration', 'soundOn', 'removeBg', 'bgTolerance',
+  'boxes', 'correctAnswer', 'timerEnabled', 'timerDuration', 'numberSectors',
+];
+function loadSavedConfig() {
+  try {
+    const raw = typeof localStorage !== 'undefined' && localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return (parsed && typeof parsed === 'object') ? parsed : null;
+  } catch { return null; }
+}
+function pickSaved(saved, key, fallback) {
+  return saved && saved[key] !== undefined ? saved[key] : fallback;
+}
+
 // ---------- Image background removal (canvas flood-fill) ----------
 function processImage(originalUrl, removeBg, tolerance) {
   return new Promise((resolve) => {
@@ -198,21 +220,27 @@ function processImage(originalUrl, removeBg, tolerance) {
 }
 
 function CarnivalSpinner() {
+  // Load any previously-saved teacher setup once at mount.
+  const savedConfig = loadSavedConfig();
+  const pick = (k, def) => pickSaved(savedConfig, k, def);
+
   // ----- Title -----
-  const [titleLine1, setTitleLine1] = useState('THE GRAND');
-  const [titleLine2, setTitleLine2] = useState('PRIZE WHEEL');
+  const [titleLine1, setTitleLine1] = useState(() => pick('titleLine1', 'THE GRAND'));
+  const [titleLine2, setTitleLine2] = useState(() => pick('titleLine2', 'PRIZE WHEEL'));
 
   // ----- Main wheel -----
-  const [sectors, setSectors] = useState(() =>
-    Array.from({ length: 6 }, (_, i) => ({
+  const [sectors, setSectors] = useState(() => {
+    const savedSectors = pick('sectors', null);
+    if (Array.isArray(savedSectors) && savedSectors.length >= 2) return savedSectors;
+    return Array.from({ length: 6 }, (_, i) => ({
       id: `s_${Date.now()}_${i}`, label: `Player ${i + 1}`, weight: 1,
-    }))
-  );
-  const [biased, setBiased] = useState(false);
-  const [removeWinner, setRemoveWinner] = useState(false);
-  const [spinDuration, setSpinDuration] = useState(7);
-  const [celebration, setCelebration] = useState('confetti');
-  const [soundOn, setSoundOn] = useState(true);
+    }));
+  });
+  const [biased, setBiased] = useState(() => pick('biased', false));
+  const [removeWinner, setRemoveWinner] = useState(() => pick('removeWinner', false));
+  const [spinDuration, setSpinDuration] = useState(() => pick('spinDuration', 7));
+  const [celebration, setCelebration] = useState(() => pick('celebration', 'confetti'));
+  const [soundOn, setSoundOn] = useState(() => pick('soundOn', true));
 
   const [rotation, setRotation] = useState(0);
   const [spinning, setSpinning] = useState(false);
@@ -224,8 +252,8 @@ function CarnivalSpinner() {
   // ----- Center image -----
   const [originalDataUrl, setOriginalDataUrl] = useState(null);
   const [userImage, setUserImage] = useState(null);
-  const [removeBg, setRemoveBg] = useState(true);
-  const [bgTolerance, setBgTolerance] = useState(40);
+  const [removeBg, setRemoveBg] = useState(() => pick('removeBg', true));
+  const [bgTolerance, setBgTolerance] = useState(() => pick('bgTolerance', 40));
   const [processing, setProcessing] = useState(false);
 
   // ----- Settings sections -----
@@ -236,24 +264,30 @@ function CarnivalSpinner() {
   const toggleSection = (k) => setOpenSection((p) => ({ ...p, [k]: !p[k] }));
 
   // ----- Prize boxes -----
-  const [boxes, setBoxes] = useState(DEFAULT_BOXES);
+  const [boxes, setBoxes] = useState(() => {
+    const savedBoxes = pick('boxes', null);
+    if (Array.isArray(savedBoxes) && savedBoxes.length === 9) return savedBoxes;
+    return DEFAULT_BOXES;
+  });
 
   // ----- Bonus question (image-based) -----
   const [questionImage, setQuestionImage] = useState(null);     // teacher's question photo
   const [incorrectImage, setIncorrectImage] = useState(null);   // teacher's "wrong!" graphic (optional)
-  const [correctAnswer, setCorrectAnswer] = useState(1);        // 0..3 = A..D
+  const [correctAnswer, setCorrectAnswer] = useState(() => pick('correctAnswer', 1)); // 0..3 = A..D
 
   // ----- Timer -----
-  const [timerEnabled, setTimerEnabled] = useState(true);
-  const [timerDuration, setTimerDuration] = useState(30);       // seconds
+  const [timerEnabled, setTimerEnabled] = useState(() => pick('timerEnabled', true));
+  const [timerDuration, setTimerDuration] = useState(() => pick('timerDuration', 30));
   const [timeLeft, setTimeLeft] = useState(30);
   const [timerExpired, setTimerExpired] = useState(false);
   const [showBoom, setShowBoom] = useState(false);
 
   // ----- Number spinner -----
-  const [numberSectors, setNumberSectors] = useState(() =>
-    DEFAULT_NUMBERS.map((n, i) => ({ id: `n_${i}`, label: n, weight: 1 }))
-  );
+  const [numberSectors, setNumberSectors] = useState(() => {
+    const savedNums = pick('numberSectors', null);
+    if (Array.isArray(savedNums) && savedNums.length >= 2) return savedNums;
+    return DEFAULT_NUMBERS.map((n, i) => ({ id: `n_${i}`, label: n, weight: 1 }));
+  });
   const [numberRotation, setNumberRotation] = useState(0);
   const [numberSpinning, setNumberSpinning] = useState(false);
   const [numberWinner, setNumberWinner] = useState(null);
@@ -299,6 +333,27 @@ function CarnivalSpinner() {
     }, 220);
     return () => { cancelled = true; clearTimeout(t); };
   }, [originalDataUrl, removeBg, bgTolerance]);
+
+  // ----- Auto-save teacher setup to localStorage (debounced) -----
+  useEffect(() => {
+    const t = setTimeout(() => {
+      try {
+        const cfg = {
+          titleLine1, titleLine2, sectors, biased, removeWinner,
+          spinDuration, celebration, soundOn, removeBg, bgTolerance,
+          boxes, correctAnswer, timerEnabled, timerDuration, numberSectors,
+        };
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(cfg));
+      } catch {
+        // Quota exceeded or storage disabled — fail silently; in-memory state still works.
+      }
+    }, 400);
+    return () => clearTimeout(t);
+  }, [
+    titleLine1, titleLine2, sectors, biased, removeWinner,
+    spinDuration, celebration, soundOn, removeBg, bgTolerance,
+    boxes, correctAnswer, timerEnabled, timerDuration, numberSectors,
+  ]);
 
   // ----- Timer countdown (only while in 'question' view) -----
   useEffect(() => {
