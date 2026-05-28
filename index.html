@@ -259,7 +259,7 @@ function CarnivalSpinner() {
   // ----- Settings sections -----
   const [openSection, setOpenSection] = useState({
     title: false, players: true, image: false,
-    spin: false, boxes: false, question: false, numbers: false,
+    spin: false, boxes: false, question: false, numbers: false, setup: false,
   });
   const toggleSection = (k) => setOpenSection((p) => ({ ...p, [k]: !p[k] }));
 
@@ -315,6 +315,7 @@ function CarnivalSpinner() {
   const fileInputRef = useRef(null);
   const questionImageRef = useRef(null);
   const incorrectImageRef = useRef(null);
+  const setupImportRef = useRef(null);
   const timerStartRef = useRef(null);
   const timerRafRef = useRef(null);
 
@@ -550,6 +551,79 @@ function CarnivalSpinner() {
     setSectors(Array.from({ length: 6 }, (_, i) => ({
       id: `s_${Date.now()}_${i}`, label: `Player ${i + 1}`, weight: 1,
     })));
+    setRotation(0); setWinner(null); setShowWinner(false); setSpinning(false);
+  };
+
+  // ----- Export / import / clear teacher setup -----
+  const exportSetup = () => {
+    const cfg = {
+      _format: 'grand-prize-wheel/v1',
+      _exportedAt: new Date().toISOString(),
+      titleLine1, titleLine2, sectors, biased, removeWinner,
+      spinDuration, celebration, soundOn, removeBg, bgTolerance,
+      boxes, correctAnswer, timerEnabled, timerDuration, numberSectors,
+    };
+    const blob = new Blob([JSON.stringify(cfg, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const stamp = new Date().toISOString().slice(0, 10);
+    a.href = url;
+    a.download = `gpw-setup-${stamp}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const importSetup = (file) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = JSON.parse(e.target.result);
+        if (!data || typeof data !== 'object') throw new Error('Invalid file');
+        if (typeof data.titleLine1 === 'string') setTitleLine1(data.titleLine1);
+        if (typeof data.titleLine2 === 'string') setTitleLine2(data.titleLine2);
+        if (Array.isArray(data.sectors) && data.sectors.length >= 2) setSectors(data.sectors);
+        if (typeof data.biased === 'boolean') setBiased(data.biased);
+        if (typeof data.removeWinner === 'boolean') setRemoveWinner(data.removeWinner);
+        if (typeof data.spinDuration === 'number') setSpinDuration(data.spinDuration);
+        if (typeof data.celebration === 'string') setCelebration(data.celebration);
+        if (typeof data.soundOn === 'boolean') setSoundOn(data.soundOn);
+        if (typeof data.removeBg === 'boolean') setRemoveBg(data.removeBg);
+        if (typeof data.bgTolerance === 'number') setBgTolerance(data.bgTolerance);
+        if (Array.isArray(data.boxes) && data.boxes.length === 9) setBoxes(data.boxes);
+        if (typeof data.correctAnswer === 'number') setCorrectAnswer(data.correctAnswer);
+        if (typeof data.timerEnabled === 'boolean') setTimerEnabled(data.timerEnabled);
+        if (typeof data.timerDuration === 'number') setTimerDuration(data.timerDuration);
+        if (Array.isArray(data.numberSectors) && data.numberSectors.length >= 2) setNumberSectors(data.numberSectors);
+      } catch (err) {
+        alert('Could not import — file is not a valid Grand Prize Wheel setup.');
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  const clearSavedSetup = () => {
+    if (!confirm('Clear all saved setup and reset to defaults? This cannot be undone.')) return;
+    try { localStorage.removeItem(STORAGE_KEY); } catch {}
+    setTitleLine1('THE GRAND');
+    setTitleLine2('PRIZE WHEEL');
+    setSectors(Array.from({ length: 6 }, (_, i) => ({
+      id: `s_${Date.now()}_${i}`, label: `Player ${i + 1}`, weight: 1,
+    })));
+    setBiased(false);
+    setRemoveWinner(false);
+    setSpinDuration(7);
+    setCelebration('confetti');
+    setSoundOn(true);
+    setRemoveBg(true);
+    setBgTolerance(40);
+    setBoxes(DEFAULT_BOXES);
+    setCorrectAnswer(1);
+    setTimerEnabled(true);
+    setTimerDuration(30);
+    setNumberSectors(DEFAULT_NUMBERS.map((n, i) => ({ id: `n_${i}`, label: n, weight: 1 })));
     setRotation(0); setWinner(null); setShowWinner(false); setSpinning(false);
   };
 
@@ -1751,6 +1825,40 @@ function CarnivalSpinner() {
                         </div>
                       ))}
                     </div>
+                  </Section>
+
+                  {/* Setup — export / import / clear */}
+                  <Section title="SAVE & LOAD SETUP" icon={Upload} isOpen={openSection.setup} onToggle={() => toggleSection('setup')}>
+                    <p className="text-xs mb-3" style={{ color: DEEP_RED, opacity: 0.8 }}>
+                      Your setup auto-saves to this browser. Export a backup to share between classrooms or save different classes as separate files.
+                    </p>
+                    <input ref={setupImportRef} type="file" accept="application/json,.json"
+                      onChange={(e) => {
+                        const f = e.target.files && e.target.files[0];
+                        importSetup(f);
+                        e.target.value = '';
+                      }}
+                      style={{ display: 'none' }} />
+                    <div className="grid grid-cols-2 gap-2 mb-2">
+                      <button onClick={exportSetup}
+                        className="font-bungee text-xs px-3 py-2 rounded-md flex items-center justify-center gap-1"
+                        style={{ background: DEEP_RED, color: GOLD_LIGHT }}>
+                        <Send size={12} /> EXPORT
+                      </button>
+                      <button onClick={() => setupImportRef.current?.click()}
+                        className="font-bungee text-xs px-3 py-2 rounded-md flex items-center justify-center gap-1"
+                        style={{ background: 'rgba(92,10,28,0.1)', color: DEEP_RED, border: `1px solid ${DEEP_RED}` }}>
+                        <Upload size={12} /> IMPORT
+                      </button>
+                    </div>
+                    <button onClick={clearSavedSetup}
+                      className="w-full font-bungee text-xs px-3 py-2 rounded-md flex items-center justify-center gap-1"
+                      style={{ background: 'rgba(92,10,28,0.05)', color: DEEP_RED, border: `1px dashed ${DEEP_RED}` }}>
+                      <Trash2 size={12} /> CLEAR SAVED SETUP
+                    </button>
+                    <p className="text-xs mt-2" style={{ color: DEEP_RED, opacity: 0.6 }}>
+                      Note: uploaded images (center, question, incorrect) aren't saved — re-upload after import.
+                    </p>
                   </Section>
                 </div>
               </div>
