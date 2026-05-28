@@ -985,6 +985,10 @@ function CarnivalSpinner() {
   }) => {
     const sa = 360 / Math.max(sectorList.length, 1);
     const labelFontSize = Math.max(11, Math.min(26, 170 / sectorList.length + 6));
+    // Label fits along the radial direction. Available radial width is finite,
+    // so cap chars based on font size: small font (many sectors) can fit long
+    // names; large font (few sectors) needs tighter truncation.
+    const labelCharLimit = Math.max(10, Math.floor(220 / (labelFontSize * 0.55)));
     const NUM_LIGHTS = 32;
     const lightArr = Array.from({ length: NUM_LIGHTS }, (_, i) => {
       const ang = (i / NUM_LIGHTS) * 360;
@@ -1028,7 +1032,7 @@ function CarnivalSpinner() {
                     fontSize: labelFontSize, letterSpacing: '0.02em',
                     paintOrder: 'stroke fill', stroke: 'rgba(0,0,0,0.18)', strokeWidth: 0.6,
                   }}>
-                  {s.label.length > 14 ? s.label.slice(0, 13) + '…' : s.label}
+                  {s.label.length > labelCharLimit ? s.label.slice(0, labelCharLimit - 1) + '…' : s.label}
                 </text>
               </g>
             );
